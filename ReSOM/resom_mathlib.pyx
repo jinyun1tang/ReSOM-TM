@@ -304,14 +304,13 @@ def bgc_integrate(int nprimvars, int nreactions, double dtime,
   cdef int it, itmax, nr
   it = 0
   itmax = 10
-  nr = csm.shape[1]
 
   while True:
     p_dt=np.matmul(csm_p[0:nprimvars,:], rrates)
     d_dt=np.matmul(csm_d[0:nprimvars,:], rrates)
     pscal, lneg=calc_state_pscal(dtime, ystates, p_dt, d_dt)
     if lneg and it <= itmax:
-      rscal=calc_reaction_rscal(nprimvars, nr, pscal, csm_d)
+      rscal=calc_reaction_rscal(nprimvars, nreactions, pscal, csm_d)
       rrates=rscal*rrates
     else:
       dydt=np.matmul(csm,rrates)
