@@ -82,7 +82,7 @@ cdef inline bint is_activek(double kd):
     determine if kd is an active value
   """
   kd_infty=1.e10
-  return (kd > 0 and kd < 0.9 * kd_infty)
+  return (kd > 0. and kd < 0.9 * kd_infty)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -238,6 +238,7 @@ def wfilm_thick(double sat, double psisat, double chb, s_sat):
   delta = np.fmax(delta,1.e-8)
   return delta
 
+
 cdef double minp(np.ndarray[dtype_t,ndim=1] p, np.ndarray[dtype_t,ndim=1] v):
   """
     find the minimum of the nonzero p entries, with the entry determined
@@ -291,30 +292,32 @@ def calc_reaction_rscal(int nprimvars, int nr, np.ndarray[dtype_t,ndim=1] pscal,
     rscal[j] = minp(pscal, csm_d[0:nprimvars,j])
   return rscal
 
-
-def bgc_integrate(int nprimvars, int nreactions, double dtime,
-  np.ndarray[dtype_t,ndim=2] csm_p,
-  np.ndarray[dtype_t,ndim=2] csm_d,
-  np.ndarray[dtype_t,ndim=2] csm,
-  np.ndarray[dtype_t,ndim=1] rrates,
-  np.ndarray[dtype_t,ndim=1] ystates):
+def calc_reaction_rscal_sparse(int nr, np.ndarray[dtype_t,ndim=1] pscal, \
+  np.ndarray[int] csc_indices, np.ndarray[int] csc_indptr):
   """
-    update the temporal derivative
+    compute the scaling factor for each reaction, using
+    index information from csm_d
   """
-  cdef int it, itmax, nr
-  it = 0
-  itmax = 10
+  rscal=np.ones(nr)
+  for j in range(nr):
+    rscal[j] = 1.0
+    for k in range(csc_indptr[j],csc_indptr[j+1]):
+      rscal[j]=min(rscal[j],pscal[csc_indices[k]])
+  return rscal
 
-  while True:
-    p_dt=np.matmul(csm_p[0:nprimvars,:], rrates)
-    d_dt=np.matmul(csm_d[0:nprimvars,:], rrates)
-    pscal, lneg=calc_state_pscal(dtime, ystates, p_dt, d_dt)
-    if lneg and it <= itmax:
-      rscal=calc_reaction_rscal(nprimvars, nreactions, pscal, csm_d)
-      rrates=rscal*rrates
-    else:
-      dydt=np.matmul(csm,rrates)
-      break
-  ystate_new=dydt*dtime+ystates
 
-  return ystate_new
+def csr_matmul(np.ndarray[dtype_t] data, np.ndarray[int] indices, \
+  np.ndarray[int] indptr, int nc, np.ndarray[dtype_t] v):
+  """
+  multiply a Compressed Sparse Row matrix with vector v
+  """
+  cdef int nr
+  if nc != np.size(v):
+    raise ValueError("check input array size")
+  nr = np.size(indptr)-1
+  result=np.zeros(nr)
+
+  for j in range(nr):
+    for k in range(indptr[j],indptr[j+1]):
+      result[j] =result[j]+data[k]*v[indices[k]]
+  return result
