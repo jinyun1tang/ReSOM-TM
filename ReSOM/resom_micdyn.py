@@ -51,11 +51,12 @@ class resomPar():
 		self.micYVM = np.zeros(varid.nmicrobes)        #maintenance yield from structural biomass
 		self.micYXE = np.zeros(varid.nmicrobes)        #enzyme production yield from reserve
 		self.micYXV = np.zeros(varid.nmicrobes)        #structural biomass yield from reserve
-		self.micPE_max=np.zeros(varid.nmicrobes)       #maximum enzyme production rate
+		self.micPE_alpha=np.zeros(varid.nmicrobes)       #maximum enzyme production rate
 		self.micX_h = np.zeros(varid.nmicrobes)        #reserve mobilization rate
 		self.micX_h0= np.zeros(varid.nmicrobes)
 		self.micV_m = np.zeros(varid.nmicrobes)        #somatic maintenance
-
+		self.miciMort=np.zeros(varid.nmicrobes)
+		self.micPerstV=np.zeros(varid.nmicrobes)
 def resom_exinput(dtime, substrate_input, varid, ystates0):
 	"""
 	add substrates
@@ -69,11 +70,15 @@ def cell_physioloy(ystates,resomPar,varid):
 	"""
 	 doing microbial cell physiology
 	"""
-	newCell= np.zeros(varid.nmicrobes)
-	rCO2_m = np.zeros(varid.nmicrobes)
-	rCO2_g = np.zeros(varid.nmicrobes)
-	rCO2_e = np.zeros(varid.nmicrobes)
-	newEnz = np.zeros(varid.nmicrobes)
+	newCell= np.zeros(varid.nmicrobes)  #cell growth or shrinking
+	rCO2_m = np.zeros(varid.nmicrobes)  #co2 respiration associated with maintenance
+	rCO2_g = np.zeros(varid.nmicrobes)  #co2 respiration associated with growth
+	rCO2_e = np.zeros(varid.nmicrobes)  #co2 respiration associated with enzyme production
+	newEnz = np.zeros(varid.nmicrobes)  #new enzyme production
+	emortCell=np.zeros(varid.nmicrobes)  #cell mortality
+	imortCell=np.zeros(varid.nmicrobes)
+	phyMortCell=np.zeros(varid.nmicrobes)#physiological mortalitiy
+
 	for j in range(varid.nmicrobes):
 		#loop over each microbes
 		#determine reserve density
@@ -83,7 +88,7 @@ def cell_physioloy(ystates,resomPar,varid):
 			#check whether electron acceptor limitation is on
 			dm0=resomPar.micX_h0[j]*ee-resomPar.micV_m[j]
 			if dm0<=0.0:
-				#cell shrink
+				#cell shrink because reserve limitation
 				newCell[j]=dm/(ee+resomPar.micYVM[j])
 				rCO2_m[j]=resomPar.micV_m[j]*ystates[varid.beg_microbeV+j]
 				rCO2_g[j]=0.0
@@ -91,39 +96,20 @@ def cell_physioloy(ystates,resomPar,varid):
 				newEnz[j]=0.0
 			else:
 				#electron acceptor limitation is on
-
+				#reserve is not limiting, maintenance deficit is
+				#translated into mortality
+				emortCell[j]=dm  #enhanced mortality due to unfulfilled maintenance
 		else:
-			#active growth, iterate using the secant method
-			newCell0=dm/(ee+1./resomPar.micYXV[j])
-			newCell[j]=newCell0
-			newEnz[j] = 0.0
-			residual0=0.0
-			residual=0.0
-			if resomPar.micPE_max[j] > 0.0:
-				oldCell=newCell[j]
-				h0=(resomPar.micX_h[j]-newCell[j])*ee-resomPar.micV_m[j]
-				newEnz[j]=resomPar.micPE_max[j]*h0/(resomPar.micPE_max[j]+h0)
-				residual0=(resomPar.micX_h[j]-newCell[j])*ee-resomPar.micV_m[j]- \
-						newCell[j]/resomPar.micYXV[j]-newEnz[j]/resomPar.micYXE[j]
-				#find a new value
-				newCell[j]=newCell0+newEnz[j]/resomPar.micYXE[j]/(ee+1.0/resomPar.micYXV[j])
-				h0=(resomPar.micX_h[j]-newCell[j])*ee-resomPar.micV_m[j]
-				newEnz[j]=resomPar.micPE_max[j]*h0/(resomPar.micPE_max[j]+h0)
-
-				while abs(residual0)>h0*1.e-3 or residual0 < 0.0:
-					residual=(resomPar.micX_h[j]-newCell[j])*ee-resomPar.micV_m[j]- \
-						newCell[j]/resomPar.micYXV[j]-newEnz[j]/resomPar.micYXE[j]
-					newCell1=newCell[j]-residual/(residual0-residual)*(oldCell-newCell[j])
-					residual0=residual
-					oldCell=newCell[j]
-					newCell[j]=newCell1
-					h0=(resomPar.micX_h[j]-newCell[j])*ee-resomPar.micV_m[j]
-					newEnz[j]=resomPar.micPE_max[j]*h0/(resomPar.micPE_max[j]+h0)
-
+			#print "active growth, iterate using the secant method"
+			newCell[j]=dm/(ee+(1.0+resomPar.micPE_alpha[j])/resomPar.micYXV[j])
+			newEnz[j] =resomPar.micPE_alpha[j]*newCell[j]*resomPar.micYXE[j]/resomPar.micYXV[j]
+			rCO2_m[j] =resomPar.micV_m[j]
 			rCO2_e[j]=newEnz[j]*(1.0/resomPar.micYXE[j]-1.0)
 			rCO2_g[j]=newCell[j]*(1.0/resomPar.micYXV[j]-1.0)
-
-	return newCell,rCO2_m,rCO2_g,rCO2_e,newEnz,residual
+		imortCell[j] = resomPar.miciMort[j]  #intrinsinc mortality
+		phyMortCell[j]=(emortCell[j]+imortCell[j])* \
+			ystates[varid.beg_microbeV+j]/(resomPar.micPerstV[j]+ystates[varid.beg_microbeV+j])
+	return newCell,rCO2_m,rCO2_g,rCO2_e,newEnz,phyMortCell
 
 def depolymerization(ystates, varid, resomPar):
 	#enzyme hydrolysis, Fp
@@ -150,6 +136,7 @@ def uptake_monomer(ystates, varid, resomPar):
 	S2=ystates[varid.oxygen]
 	sc_ij=remath.supeca(E, S1, S2, K1, K2, nE, nS1, nS2)
 	return de_monomer
+
 def resom_dyncore(ystates, nreactions, dtime, varid, resomPar):
 	"""
 	define the resom microbial dynamics
@@ -160,9 +147,12 @@ def resom_dyncore(ystates, nreactions, dtime, varid, resomPar):
 	#monomer uptake
 	de_monomer=uptake_monomer(ystates, varid, resomPar)
 	#cell physiology
-	newcell,rCO2_m,rCO2_g,rCO2_e,newEnz,residual=cell_physioloy(ystates,resomPar,varid)
-	#cell mortality, assuming all cells are lysed right away.
+	newcell, rCO2_m, rCO2_g, rCO2_e, newEnz, phyMortCell=cell_physioloy(ystates,resomPar,varid)
+	#trophic dynamics induced cell mortality
+	#this will be place to plug in trophic dynamics related mortality
+
+	#assuming all cells are lysed right away.
 
 	#oxygen diffusion
-
+	
 	return rrates
