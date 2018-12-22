@@ -25,13 +25,13 @@ def bgc_integrate(nprimvars, nreactions, dtime,
   return ystate_new
 
 def bgc_integrate_sparse(nprimvars, nreactions, dtime,
-  csc_csm_p,csc_csm_d,csc_csm,rrates,ystates):
+  csc_csm_p,csc_csm_d,csc_csm,rrates0,ystates):
   """
     update the temporal derivative
   """
   it = 0
   itmax = 10
-
+  rrates=rrates0
   while True:
     p_dt=csc_csm_p.dot(rrates)
     d_dt=csc_csm_d.dot(rrates)
@@ -44,4 +44,4 @@ def bgc_integrate_sparse(nprimvars, nreactions, dtime,
       break
   ystate_new=dydt*dtime+ystates
 
-  return ystate_new
+  return ystate_new,rrates

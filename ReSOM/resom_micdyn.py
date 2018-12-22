@@ -1,12 +1,14 @@
 import numpy as np
 import resom_mathlib as remath
 
+from scipy.sparse import csr_matrix, csc_matrix
+
 
 class varid():
 	def __init__(self):
 		#substrates
 		#polymers
-		self.beg_substrates=0
+		self.beg_orgsubstrates=0
 		self.npolymers=3
 		self.polymer_pom=0    #local id, polymeric organic matter
 		self.polymer_denz=1   #denatured enzymed
@@ -17,53 +19,44 @@ class varid():
 		self.nmonomers=self.npolymers
 		self.beg_monomer=self.end_polymer+1
 		self.end_monomer=self.beg_monomer+self.nmonomers-1
-		#count total number of substrates
-		self.end_substrates=self.end_monomer
-		self.nsubstartes=self.end_substrates-self.beg_substrates+1
-		#enzymes
-		self.nenzymes=1
-		self.beg_enzyme=self.end_monomer+1
-		self.end_enzyme=self.beg_enzyme+self.nenzymes-1
+		self.end_orgsubstrates=self.end_monomer
+		self.norgsubstrates=self.end_orgsubstrates-self.beg_orgsubstrates+1
 
+		self.oxygen=self.end_monomer+1
+		self.co2   =self.oxygen+1
+		#count total number of substrates
+
+		#cumulative monomer uptake
+		self.beg_mics_cummonomer=self.co2+1
+		self.end_mics_cummonomer=self.beg_mics_cummonomer+self.nmonomers-1
+		self.mics_cum_cresp_co2 =self.end_mics_cummonomer+1
+		self.nbvars = self.mics_cum_cresp_co2+1
 		#microbes
 		#microbial reserve
 		self.nmicrobes=1
-		self.beg_microbeX=self.end_enzyme+1
+		self.beg_microbeX=self.mics_cum_cresp_co2+1
 		self.end_microbeX=self.beg_microbeX+self.nmicrobes-1
 		#microbial biomass
 		self.beg_microbeV=self.end_microbeX+1
 		self.end_microbeV=self.beg_microbeV+self.nmicrobes-1
-
+		#enzymes
+		self.nenzymes=1
+		self.beg_enzyme=self.end_microbeV+1
+		self.end_enzyme=self.beg_enzyme+self.nenzymes-1
 		#mineral surface, inert, only equilibrium sorption is considered
 		self.nmineralAs=1
-		self.beg_mineralA=self.end_microbeV+1
+		self.beg_mineralA=self.end_enzyme+1
 		self.end_mineralA=self.beg_mineralA+self.nmineralAs-1
-		self.oxygen=self.end_mineralA+1
-		self.co2   =self.oxygen+1
-		self.nvars=self.co2+1
+		self.ntvars=self.end_mineralA+1
 
 class reactionid():
 	def __init__(self,varid):
 		self.beg_depolymer=0
 		self.end_depolymer=self.beg_depolymer+varid.npolymers-1
-		self.beg_mic_upmonomer=self.end_depolymer+1
-		self.end_mic_upmonomer=self.beg_mic_upmonomer+varid.nmonomers-1
-		self.beg_mic_mobileX=self.end_mic_upmonomer+1
-		self.end_mic_mobileX=self.beg_mic_mobileX + varid.nmicrobes-1
-		self.beg_mic_mort  =self.end_mic_mobileX+1
-		self.end_mic_mort  =self.beg_mic_mort+varid.nmicrobes-1
-		self.beg_pro_enzyme=self.end_mic_mort+1
-		self.end_pro_enzyme=self.beg_pro_enzyme+varid.nenzymes-1
-		self.beg_de_enzyme =self.end_pro_enzyme+1
-		self.end_de_enzyme =self.beg_de_enzyme+varid.nenzymes-1
-		self.beg_mic_upoxygen=self.end_de_enzyme+1
-		self.end_mic_upoxygen=self.beg_mic_upoxygen+varid.nmicrobes-1
-		self.beg_mic_proco2  = self.end_mic_upoxygen+1
-		self.end_mic_proco2  = self.beg_mic_proco2+varid.nmicrobes-1
-		self.diffus_oxygen = self.end_mic_proco2+1
-		self.diffus_co2    = self.diffus_oxygen+1
-		self.nreactions =self.diffus_co2+1
-
+		self.beg_mics_upmonomer=self.end_depolymer+1
+		self.end_mics_upmonomer=self.beg_mics_upmonomer+varid.nmonomers-1
+		self.mics_cresp_oxygen = self.end_mics_upmonomer+1
+		self.nbreactions =self.mics_cresp_oxygen+1
 
 class resomPar():
 	def __init__(self,varid):
@@ -74,7 +67,7 @@ class resomPar():
 		self.micYVM = np.zeros(varid.nmicrobes)        #maintenance yield from structural biomass
 		self.micYXE = np.zeros(varid.nmicrobes)        #enzyme production yield from reserve
 		self.micYXV = np.zeros(varid.nmicrobes)        #structural biomass yield from reserve
-		self.micPE_alpha=np.zeros(varid.nmicrobes)       #maximum enzyme production rate
+		self.micPE_alpha=np.zeros(varid.nmicrobes)     #maximum enzyme production rate
 		self.micX_h = np.zeros(varid.nmicrobes)        #reserve mobilization rate
 		self.micX_h0= np.zeros(varid.nmicrobes)
 		self.micV_m = np.zeros(varid.nmicrobes)        #somatic maintenance
@@ -82,6 +75,8 @@ class resomPar():
 		self.micPerstV=np.zeros(varid.nmicrobes)
 		self.K_mic_monomer=np.zeros((varid.nmicrobes,varid.nmonomers))
 		self.K_mins_monomer=np.zeros((varid.nmineralAs,varid.nmonomers))
+		self.nosc_monomer=np.zeros(varid.nmonomers)    #nominal oxidation status
+		self.YX_monomer=np.zeros(varid.nmonomers)+0.5
 		self.vmax_umonomer=np.ones((varid.nmicrobes,varid.nmonomers))
 		self.K_mic_oxygen=np.zeros(varid.nmicrobes)
 
@@ -90,8 +85,8 @@ def resom_exinput(dtime, substrate_input, varid, ystates0):
 	add substrates
 	"""
 	ystates=np.copy(ystates0)
-	for j in range(varid.beg_substrates, varid.end_substrates+1):
-		ystates[j]=ystates0[j]+dtime*substrate_input[j-varid.beg_substrates]
+	for j in range(varid.beg_orgsubstrates, varid.end_orgsubstrates+1):
+		ystates[j]=ystates0[j]+dtime*substrate_input[j-varid.beg_orgsubstrates]
 	return ystates
 
 def cell_physioloy(ystates,resomPar,varid):
@@ -102,6 +97,7 @@ def cell_physioloy(ystates,resomPar,varid):
 	rCO2_m = np.zeros(varid.nmicrobes)  #co2 respiration associated with maintenance
 	rCO2_g = np.zeros(varid.nmicrobes)  #co2 respiration associated with growth
 	rCO2_e = np.zeros(varid.nmicrobes)  #co2 respiration associated with enzyme production
+	rCO2_phys = np.zeros(varid.nmicrobes)  #co2 respiration associated with enzyme production
 	newEnz = np.zeros(varid.nmicrobes)  #new enzyme production
 	emortCell=np.zeros(varid.nmicrobes)  #cell mortality
 	imortCell=np.zeros(varid.nmicrobes)
@@ -118,7 +114,7 @@ def cell_physioloy(ystates,resomPar,varid):
 			if dm0<=0.0:
 				#cell shrink because reserve limitation
 				newCell[j]=dm/(ee+resomPar.micYVM[j])
-				rCO2_m[j]=resomPar.micV_m[j]*ystates[varid.beg_microbeV+j]
+				rCO2_m[j]=(resomPar.micX_h[j]-newCell[j])*ee-newCell[j]
 				rCO2_g[j]=0.0
 				rCO2_e[j]=0.0
 				newEnz[j]=0.0
@@ -138,7 +134,8 @@ def cell_physioloy(ystates,resomPar,varid):
 		phyMortCell[j]=(emortCell[j]+imortCell[j])* \
 			ystates[varid.beg_microbeV+j]/(resomPar.micPerstV[j]+ystates[varid.beg_microbeV+j])
 		mobileX[j]=(resomPar.micX_h[j]-newCell[j])*ee
-	return newCell,rCO2_m,rCO2_g,rCO2_e,newEnz,phyMortCell,mobileX
+		rCO2_phys[j]=rCO2_m[j]+rCO2_g[j]+rCO2_e[j]
+	return newCell,rCO2_phys,newEnz,phyMortCell,mobileX
 
 def depolymerization(ystates, varid, resomPar):
 	#enzyme hydrolysis, Fp
@@ -178,26 +175,86 @@ def uptake_monomer(ystates, varid, resomPar):
 	mic_upmonomer=sc_ijk[0:varid.nmicrobes,0:varid.nmonomers,0]*resomPar.vmax_umonomer
 	return mic_upmonomer
 
-def resom_dyncore(ystates, nreactions, dtime, varid, resomPar):
+def resom_dyncore(ystates, varid, reactionid, resomPar):
 	"""
 	define the resom microbial dynamics
 	rrate
 	"""
-	rrates=np.zeros(nreactions)
+	rrates=np.zeros(reactionid.nbreactions)
 	de_polymer=depolymerization(ystates, varid, resomPar)
+
 	#monomer uptake
 	mic_umonomer=uptake_monomer(ystates, varid, resomPar)
 	#cell physiology
-	newcell, rCO2_m, rCO2_g, rCO2_e, newEnz, phyMortCell, mobileX=cell_physioloy(ystates,resomPar,varid)
+	newcell, rCO2_phys, newEnz, phyMortCell, mobileX=cell_physioloy(ystates,resomPar,varid)
 	#trophic dynamics induced cell mortality
 	#this will be place to plug in trophic dynamics related mortality
 
 	#assuming all cells are lysed right away.
 
-	#oxygen diffusion
+	#assemble the reactions
+	#depolymerization
+	for j in range(varid.npolymers):
+		rrates[reactionid.beg_depolymer+j]=np.sum(de_polymer[:,j])
+	#monomer uptake
+	for j in range(varid.nmonomers):
+		rrates[reactionid.beg_mics_upmonomer+j]=np.sum(mic_umonomer[:,j])
+	#carbon consuming respiration
+	rrates[reactionid.mics_cresp_oxygen]=np.sum(rCO2_phys)
+	return rrates,mic_umonomer, rCO2_phys, newcell, newEnz, phyMortCell, mobileX
 
-	return rrates
+def set_polymer_monomer_matrix():
+	"""
+	set up polymer composition as fractions of monomers
+	"""
+	#at present, one monomer is assumed to be associated with one polymer
+	polymer_matrix=np.zeros((3,3))
+	#polymer1->monomer1
+	polymer_matrix[0,:]=[1.,0.,0.]
+	#polymer2->monomer2
+	polymer_matrix[1,:]=[0.,1.,0.]
+	#polymer3->monomer3
+	polymer_matrix[2,:]=[0.,0.,1.]
+	return polymer_matrix
 
-def set_reaction_matrix():
+def set_reaction_matrix(varid, reactionid, resompar):
+	"""
+	define the reaction matrix
+	"""
 
-	return matrixp, matrixd
+	matrixs=np.zeros((varid.nbvars, reactionid.nbreactions))
+	#reaction of depolymerization
+	#polymer -> monomer
+	poly2monomer_matrix=set_polymer_monomer_matrix()
+	for j in range(varid.npolymers):
+		polymer_id=varid.beg_polymer+j
+		react_id=reactionid.beg_depolymer+j
+		matrixs[polymer_id,react_id]=-1.
+		for k in range(varid.nmonomers):
+			monomerid=varid.beg_monomer+k
+			matrixs[monomerid,react_id]=poly2monomer_matrix[j,k]
+	#monomer uptake
+	#nomomer + (0.25*nosc+1)o2->co2 + energy
+	for j in range(reactionid.beg_mics_upmonomer,reactionid.end_mics_upmonomer+1):
+		k=j-reactionid.beg_mics_upmonomer
+		monomerid=varid.beg_monomer+k
+		matrixs[monomerid,j]=-1.
+		matrixs[varid.oxygen,j]=(-1.0+0.25*resompar.nosc_monomer[k])*(1.-resompar.YX_monomer[k])
+		matrixs[varid.co2,j]=resompar.YX_monomer[k]
+		#the following have to be
+		matrixs[varid.beg_mics_cummonomer+k,j]=1.
+	#assuming growth and maintenance respiration has oxygen quotient of 1.
+	matrixs[varid.oxygen,reactionid.mics_cresp_oxygen]=-1.
+	matrixs[varid.co2, reactionid.mics_cresp_oxygen] = 1.
+	matrixs[varid.mics_cum_cresp_co2, reactionid.mics_cresp_oxygen]=1.
+
+	matrixp=np.copy(matrixs)
+	matrixd=np.copy(matrixs)
+	matrixd[matrixs>0.0]=0.0
+	matrixp[matrixs<0.0]=0.0
+	csc_matrixp=csc_matrix(matrixp)
+	csc_matrixd=csc_matrix(matrixd)
+	csc_matrixs=csc_matrix(matrixs)
+	return csc_matrixp, csc_matrixd, csc_matrixs
+
+#def updates_microbes(rrates0,rrates,mic_umonomer,rCO2_phys,newcell,newEnz,phyMortCell,mobileX):

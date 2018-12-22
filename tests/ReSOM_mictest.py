@@ -5,9 +5,10 @@ import ReSOM.resom_micdyn as resom_mic
 
 
 varid=resom_mic.varid()
+reid=resom_mic.reactionid(varid)
 
-print 'number of variables=%d\n'%varid.nvars
-
+print 'number of bulk variables=%d, total variables=%d\n'%(varid.nbvars,varid.ntvars)
+print 'number of reactions=%d\n'%reid.nbreactions
 resompar=resom_mic.resomPar(varid)
 
 resompar.Kaff_Enz=resompar.Kaff_Enz+1.0
@@ -17,15 +18,24 @@ resompar.micYXE = resompar.micYXE+0.3
 resompar.micYXV = resompar.micYXV+0.3
 resompar.micPE_alpha=resompar.micPE_alpha+1.e-2
 resompar.micX_h0 = resompar.micX_h0+0.01
-fo2=0.1
+fo2=0.81
 resompar.micX_h = resompar.micX_h0 * fo2
 
 resompar.micV_m = resompar.micV_m+1.e-4
 resompar.micPerstV=resompar.micPerstV+1.e-5
 
-ystates=np.array([0.,0.,0.,0.0,0.,0.1,0.2,0.0,0.0,0.0])
+ystates=np.zeros(varid.ntvars)
+ystates[varid.beg_microbeX]=0.1
+ystates[varid.beg_microbeV]=0.1
 
-newcell,rCO2_m,rCO2_g,rCO2_e,newEnz,phyMortCell=resom_mic.cell_physioloy(ystates,resompar,varid)
+
+newCell,rCO2_phys,newEnz,phyMortCell,mobileX=resom_mic.cell_physioloy(ystates,resompar,varid)
 
 
-print (newcell,rCO2_m,rCO2_g,rCO2_e,newEnz,phyMortCell)
+print (newCell,rCO2_phys,newEnz,phyMortCell,mobileX)
+
+print mobileX-newCell-rCO2_phys-newEnz
+csc_matrixp, csc_matrixd, csc_matrixs=resom_mic.set_reaction_matrix(varid, reid,resompar)
+print csc_matrixp.data
+print csc_matrixd.data
+print csc_matrixs.data
