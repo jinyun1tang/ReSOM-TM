@@ -152,6 +152,23 @@ def eca(np.ndarray[dtype_t,ndim=1] E, np.ndarray[dtype_t,ndim=1] S, np.ndarray[d
         cplx[i1,j1] = E[i1]*S[j1]/K[i1,j1]/(1.0+Fc[i1]+Fr[j1])
   return cplx
 
+def ecanorm(np.ndarray[dtype_t,ndim=1] E, np.ndarray[dtype_t,ndim=1] S, np.ndarray[dtype_t,ndim=2] K,
+  Py_ssize_t nE, Py_ssize_t nS):
+  """
+  compute enzyme substrate complexes using the eca kinetics
+  E: enzyme, S: substrates, K: affinity parameter K(E,S)
+  """
+  cdef int i1,j1
+  if nE !=len(E) or nS != len(S):
+    raise ValueError("check input array size")
+
+  cplx=np.zeros((nE,nS))
+  Fc,Fr=ecaflx(E, S, K, nE, nS)
+  for i1 in range(nE):
+    for j1 in range(nS):
+      if is_activek(K[i1,j1]):
+        cplx[i1,j1] = S[j1]/K[i1,j1]/(1.0+Fc[i1]+Fr[j1])
+  return cplx
 
 def ecaflx(np.ndarray[dtype_t,ndim=1] E, np.ndarray[dtype_t,ndim=1] S, np.ndarray[dtype_t,ndim=2] K,
   Py_ssize_t nE, Py_ssize_t nS):
@@ -272,7 +289,7 @@ def calc_state_pscal(double dtime, np.ndarray[dtype_t,ndim=1] ystate,
 
   for j in range(nprimvars):
     yt = ystate[j]+(p_dt[j]+d_dt[j])*dtime
-    if yt < tiny_val:
+    if yt < tiny_val and d_dt[j]>0.:
       tmp = dtime * d_dt[j]
       pscal[j]=-(p_dt[j]*dtime+ystate[j])/tmp*p_par
       lneg=True
