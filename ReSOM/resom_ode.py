@@ -31,7 +31,7 @@ def bgc_integrate_sparse(nprimvars, nreactions, dtime,
   """
   it = 0
   itmax = 10
-  rrates=rrates0
+  rrates=np.copy(rrates0)
   while True:
     p_dt=csc_csm_p.dot(rrates)
     d_dt=csc_csm_d.dot(rrates)
@@ -42,6 +42,6 @@ def bgc_integrate_sparse(nprimvars, nreactions, dtime,
     else:
       dydt=csc_csm.dot(rrates)
       break
+    it=it+1
   ystate_new=dydt*dtime+ystates
-
   return ystate_new,rrates

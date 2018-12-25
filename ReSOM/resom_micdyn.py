@@ -98,7 +98,7 @@ def resom_exinput(dtime, substrate_input, varid, ystates0):
 		ystates[j]=ystates0[j]+dtime*substrate_input[j-varid.beg_orgsubstrates]
 	return ystates
 
-def cell_physioloy(ystates,resomPar,varid,fo2):
+def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 	"""
 	 doing microbial cell physiology
 	"""
@@ -115,35 +115,44 @@ def cell_physioloy(ystates,resomPar,varid,fo2):
 	for j in range(varid.nmicrobes):
 		#loop over each microbes
 		#determine reserve density
-		ee=ystates[varid.beg_microbeX+j]/ystates[varid.beg_microbeV+j]
-		dm = resomPar.micX_h[j]*fo2[j]*ee-resomPar.micV_m[j]
-		if dm <= 0.0:
-			#check whether electron acceptor limitation is on
-			dm0=resomPar.micX_h0[j]*ee-resomPar.micV_m[j]
-			if dm0<=0.0:
-				#cell shrink because reserve limitation
-				newCell[j]=dm/(ee+resomPar.micYVM[j])
-				rCO2_m[j]=(resomPar.micX_h[j]-newCell[j])*ee-newCell[j]
-				rCO2_g[j]=0.0
-				rCO2_e[j]=0.0
-				newEnz[j]=0.0
+		if ystates[varid.beg_microbeV+j]>0.0:
+			ee=ystates[varid.beg_microbeX+j]/ystates[varid.beg_microbeV+j]
+			dm = resomPar.micX_h[j]*fo2[j]*ee-resomPar.micV_m[j]
+			if dm <= 0.0:
+				#check whether electron acceptor limitation is on
+				dm0=resomPar.micX_h0[j]*ee-resomPar.micV_m[j]
+				if dm0<=0.0:
+					#cell shrink because reserve limitation
+					newCell[j]=dm/(ee+resomPar.micYVM[j])
+					rCO2_m[j]=(resomPar.micX_h[j]-newCell[j])*ee-newCell[j]
+					rCO2_g[j]=0.0
+					rCO2_e[j]=0.0
+					newEnz[j]=0.0
+				else:
+					#electron acceptor limitation is on
+					#reserve is not limiting, maintenance deficit is
+					#translated into mortality
+					emortCell[j]=-dm  #enhanced mortality due to unfulfilled maintenance
 			else:
-				#electron acceptor limitation is on
-				#reserve is not limiting, maintenance deficit is
-				#translated into mortality
-				emortCell[j]=dm  #enhanced mortality due to unfulfilled maintenance
-		else:
-			#print "active growth, iterate using the secant method"
-			newCell[j]=dm/(ee+(1.0+resomPar.micPE_alpha[j])/resomPar.micYXV[j])
-			newEnz[j] =resomPar.micPE_alpha[j]*newCell[j]*resomPar.micYXE[j]/resomPar.micYXV[j]
-			rCO2_m[j] =resomPar.micV_m[j]
-			rCO2_e[j]=newEnz[j]*(1.0/resomPar.micYXE[j]-1.0)
-			rCO2_g[j]=newCell[j]*(1.0/resomPar.micYXV[j]-1.0)
-		imortCell[j] = resomPar.miciMort[j]  #intrinsinc mortality
-		phyMortCell[j]=(emortCell[j]+imortCell[j])* \
-			ystates[varid.beg_microbeV+j]/(resomPar.micPerstV[j]+ystates[varid.beg_microbeV+j])
-		mobileX[j]=(resomPar.micX_h[j]-newCell[j])*ee
-		rCO2_phys[j]=rCO2_m[j]+rCO2_g[j]+rCO2_e[j]
+				#print "active growth, iterate using the secant method"
+				newCell[j]=dm/(ee+(1.0+resomPar.micPE_alpha[j])/resomPar.micYXV[j])
+				newEnz[j] =resomPar.micPE_alpha[j]*newCell[j]*resomPar.micYXE[j]/resomPar.micYXV[j]
+				rCO2_m[j] =resomPar.micV_m[j]
+				rCO2_e[j]=newEnz[j]*(1.0/resomPar.micYXE[j]-1.0)
+				rCO2_g[j]=newCell[j]*(1.0/resomPar.micYXV[j]-1.0)
+			imortCell[j] = resomPar.miciMort[j]  #intrinsinc mortality
+			phyMortCell[j]=(emortCell[j]+imortCell[j])* \
+				ystates[varid.beg_microbeV+j]/(resomPar.micPerstV[j]+ystates[varid.beg_microbeV+j])
+			mobileX[j]=(resomPar.micX_h[j]-newCell[j])*ee
+			rCO2_phys[j]=rCO2_m[j]+rCO2_g[j]+rCO2_e[j]
+			yee=ee-dtime*mobileX[j]
+			if yee<0.:
+				fx=ee/(dtime*mobileX[j])*0.999
+				newCell[j]=newCell[j]*fx
+				rCO2_phys[j]=rCO2_phys[j]*fx
+				newEnz[j]=newEnz[j]*fx
+				mobileX[j]=mobileX[j]*fx
+
 	return newCell,rCO2_phys,newEnz,phyMortCell,mobileX
 
 def depolymerization(ystates, varid, resomPar):
@@ -194,7 +203,7 @@ def uptake_monomer(ystates, varid, resomPar):
 
 	return mic_upmonomer,fo2
 
-def resom_dyncore(ystates, varid, reactionid, resomPar):
+def resom_dyncore(ystates, dtime, varid, reactionid, resomPar):
 	"""
 	define the resom microbial dynamics
 	rrate
@@ -205,7 +214,7 @@ def resom_dyncore(ystates, varid, reactionid, resomPar):
 	#monomer uptake
 	mic_umonomer,fo2=uptake_monomer(ystates, varid, resomPar)
 	#cell physiology
-	newcell, rCO2_phys, newEnz, phyMortCell, mobileX=cell_physioloy(ystates,resomPar,varid,fo2)
+	newcell, rCO2_phys, newEnz, phyMortCell, mobileX=cell_physioloy(ystates,dtime, resomPar,varid,fo2)
 	#trophic dynamics induced cell mortality
 	#this will be place to plug in trophic dynamics related mortality
 
@@ -277,7 +286,7 @@ def set_reaction_matrix(varid, reactionid, resompar):
 	return csc_matrixp, csc_matrixd, csc_matrixs
 
 def updates_microbes(varid, reactionid, resompar, ystates, dtime, rrates0,rrates, \
-	mic_umonomer,rCO2_phys,newcell,newEnz,phyMortCell,mobileX):
+	mic_umonomer,rCO2_phys,newCell,newEnz,phyMortCell,mobileX):
 	"""
 	update microbial biomass
 	"""
@@ -299,32 +308,33 @@ def updates_microbes(varid, reactionid, resompar, ystates, dtime, rrates0,rrates
 				ystatesf[varid.beg_microbeX+k]=ystatesf[varid.beg_microbeX+k]+\
 					dtime*mic_umonomer[k,j]*fmonomer[j]*resompar.YX_monomer[j]
 
-	if foxygen > 0.:
-		#update microbial physiological variables
-		for k in range(varid.nmicrobes):
-			#growth
-			ystatesf[varid.beg_microbeX+k]=ystatesf[varid.beg_microbeX+k]-\
-				(dtime*mobileX[k]*foxygen)*ystatesf[varid.beg_microbeV+k]
-			ystatesf[varid.beg_microbeV+k]=ystatesf[varid.beg_microbeV+k]*\
-				np.exp(dtime*newCell[k]*foxygen)
-			#reserve goes to necromass
-			ystate=ystatesf[varid.beg_microbeX+k]*np.exp(-dtime*phyMortCell[k])
-			ystatesf[varid.polymer_necm]=ystatesf[varid.polymer_necm]-\
-				(ystate-ystatesf[varid.beg_microbeX+k])*resompar.YX2necm[j]
-			ystatesf[varid.beg_monomer]=ystatesf[varid.beg_monomer]-\
-				(ystate-ystatesf[varid.beg_microbeX+k])*(1.-resompar.YX2necm[j])
-			ystatesf[varid.beg_microbeX+k]=ystate
-			#structural goes to necromass
-			ystate=ystatesf[varid.beg_microbeV+k]*np.exp(-dtime*phyMortCell[j])
-			ystatesf[varid.polymer_necm]=ystatesf[varid.polymer_necm]-ystate+ystatesf[varid.beg_microbeV+k]
-			ystatesf[varid.beg_microbeV+k]=ystate
-			#enzyme production
-			ystatesf[varid.beg_enzyme+k]=ystatesf[varid.beg_enzyme+k]+\
-				newEnz[j]*foxygen*ystatesf[varid.beg_microbeV+k]*dtime
-			#compute decayed enzyme
-			ystate=ystatesf[varid.beg_enzyme+k]*np.exp(-dtime*resompar.EnziDek[k])
-			ystatesf[varid.polymer_denz]=ystatesf[varid.polymer_denz]-ystate+ystatesf[varid.beg_enzyme+k]
-			ystatesf[varid.beg_enzyme+k]=ystate
+
+	#update microbial physiological variables
+	for k in range(varid.nmicrobes):
+		#growth
+		ystatesf[varid.beg_microbeX+k]=ystatesf[varid.beg_microbeX+k]-\
+			(dtime*mobileX[k]*foxygen)*ystatesf[varid.beg_microbeV+k]
+		ystatesf[varid.beg_microbeV+k]=ystatesf[varid.beg_microbeV+k]*\
+			np.exp(dtime*newCell[k]*foxygen)
+
+		#reserve goes to necromass
+		ystate=ystatesf[varid.beg_microbeX+k]*np.exp(-dtime*phyMortCell[k])
+		ystatesf[varid.polymer_necm]=ystatesf[varid.polymer_necm]-\
+			(ystate-ystatesf[varid.beg_microbeX+k])*resompar.YX2necm[k]
+		ystatesf[varid.beg_monomer]=ystatesf[varid.beg_monomer]-\
+			(ystate-ystatesf[varid.beg_microbeX+k])*(1.-resompar.YX2necm[k])
+		ystatesf[varid.beg_microbeX+k]=ystate
+		#structural goes to necromass
+		ystate=ystatesf[varid.beg_microbeV+k]*np.exp(-dtime*phyMortCell[k])
+		ystatesf[varid.polymer_necm]=ystatesf[varid.polymer_necm]-ystate+ystatesf[varid.beg_microbeV+k]
+		ystatesf[varid.beg_microbeV+k]=ystate
+		#enzyme production
+		ystatesf[varid.beg_enzyme+k]=ystatesf[varid.beg_enzyme+k]+\
+			newEnz[k]*foxygen*ystatesf[varid.beg_microbeV+k]*dtime
+		#compute decayed enzyme
+		ystate=ystatesf[varid.beg_enzyme+k]*np.exp(-dtime*resompar.EnziDek[k])
+		ystatesf[varid.polymer_denz]=ystatesf[varid.polymer_denz]-ystate+ystatesf[varid.beg_enzyme+k]
+		ystatesf[varid.beg_enzyme+k]=ystate
 
 	return ystatesf
 

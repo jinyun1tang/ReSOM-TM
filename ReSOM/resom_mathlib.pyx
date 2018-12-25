@@ -289,7 +289,7 @@ def calc_state_pscal(double dtime, np.ndarray[dtype_t,ndim=1] ystate,
 
   for j in range(nprimvars):
     yt = ystate[j]+(p_dt[j]+d_dt[j])*dtime
-    if yt < tiny_val and d_dt[j]>0.:
+    if yt < tiny_val and d_dt[j]<0.:
       tmp = dtime * d_dt[j]
       pscal[j]=-(p_dt[j]*dtime+ystate[j])/tmp*p_par
       lneg=True
