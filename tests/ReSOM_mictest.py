@@ -18,7 +18,7 @@ resompar.micYXE = resompar.micYXE+0.3
 resompar.micYXV = resompar.micYXV+0.3
 resompar.micPE_alpha=resompar.micPE_alpha+1.e-2
 resompar.micX_h0 = resompar.micX_h0+0.01
-fo2=0.81
+fo2=[0.81]
 resompar.micX_h = resompar.micX_h0 * fo2
 
 resompar.micV_m = resompar.micV_m+1.e-4
@@ -28,8 +28,9 @@ ystates=np.zeros(varid.ntvars)
 ystates[varid.beg_microbeX]=0.1
 ystates[varid.beg_microbeV]=0.1
 
+dtime=3600.
 
-newCell,rCO2_phys,newEnz,phyMortCell,mobileX=resom_mic.cell_physioloy(ystates,resompar,varid)
+newCell,rCO2_phys,newEnz,phyMortCell,mobileX=resom_mic.cell_physioloy(ystates,dtime, resompar,varid,fo2)
 
 
 print (newCell,rCO2_phys,newEnz,phyMortCell,mobileX)

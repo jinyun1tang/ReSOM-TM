@@ -27,7 +27,8 @@ jj=0
 First=True
 ystates0=np.copy(ystates[jj,:])
 
-
+tsoil=np.zeros(nsteps)+298.
+vmsoi=np.zeros(nsteps)+0.3
 import time
 
 start = time.time()
@@ -37,6 +38,7 @@ for nn in range(nsteps):
     #add external input
     ystates0[varid.mics_cum_cresp_co2]=0.0
     ystates0[varid.beg_mics_cummonomer:varid.end_mics_cummonomer+1]=0.0
+    rmicdyn.update_kinetics_par(varid, resompar, tsoil[nn], vmoist[nn])
     ystates0=rmicdyn.resom_exinput(dtime, substrate_input, varid, ystates0)
     #run microbial model dynamic core
     rrates0,mic_umonomer, rCO2_phys, newcell, newEnz, phyMortCell, mobileX=\
