@@ -1,6 +1,6 @@
 import numpy as np
 
-import resom_mathlib as rmath
+from ReSOM import resom_mathlib as rmath
 
 def bgc_integrate(nprimvars, nreactions, dtime,
   csm_p,csm_d,csm,rrates,ystates):
@@ -31,7 +31,8 @@ def bgc_integrate_sparse(nprimvars, nreactions, dtime,
   """
   it = 0
   itmax = 10
-  rrates=np.copy(rrates0)
+  rrates=np.zeros(rrates0.shape)
+  rrates=rrates0
   while True:
     p_dt=csc_csm_p.dot(rrates)
     d_dt=csc_csm_d.dot(rrates)
@@ -43,5 +44,6 @@ def bgc_integrate_sparse(nprimvars, nreactions, dtime,
       dydt=csc_csm.dot(rrates)
       break
     it=it+1
+  ystate_new=np.zeros(ystates.shape)
   ystate_new=dydt*dtime+ystates
   return ystate_new,rrates

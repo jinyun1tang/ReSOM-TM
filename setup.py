@@ -1,4 +1,5 @@
 # from distutils.core import setup, Extension
+#cython: language_level=3
 from setuptools import setup, Extension
 
 import numpy
@@ -32,7 +33,7 @@ ext_modules = [ ]
 if use_cython:
     ext_modules += [
         Extension("ReSOM.resom_mathlib",
-                  [ "resom/resom_mathlib.pyx" ],
+                  [ "ReSOM/resom_mathlib.pyx"],
                   include_dirs=[numpy.get_include()]),
     ]
     cmdclass.update({ 'build_ext': build_ext })

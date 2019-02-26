@@ -2,14 +2,16 @@ import numpy as np
 
 import resom_micdyn as rmicdyn
 import resom_ode as rode
-
+import resom_para
 #model initialization
 dtime=3600.0
 nsteps=24*365
-varid=rmicdyn.varid()
-reid=rmicdyn.reactionid(varid)
+varid=resom_para.varid()
+reid=resom_para.reactionid(varid)
+resompar=resom_para.resomPar(varid)
+
 substrate_input=np.zeros(varid.norgsubstrates)
-resompar=rmicdyn.resomPar(varid)
+
 ystates=np.zeros(varid.ntvars)
 
 fpoly=0.7
@@ -38,7 +40,7 @@ for nn in range(nsteps):
     #add external input
     ystates0[varid.mics_cum_cresp_co2]=0.0
     ystates0[varid.beg_mics_cummonomer:varid.end_mics_cummonomer+1]=0.0
-    rmicdyn.update_kinetics_par(varid, resompar, tsoil[nn], vmoist[nn])
+    resom_para.update_kinetics_par(varid, resompar, tsoil[nn], vmoist[nn])
     ystates0=rmicdyn.resom_exinput(dtime, substrate_input, varid, ystates0)
     #run microbial model dynamic core
     rrates0,mic_umonomer, rCO2_phys, newcell, newEnz, phyMortCell, mobileX=\
@@ -68,7 +70,7 @@ for nn in range(nsteps):
         jj=np.mod(jj,24)
 
 end = time.time()
-print 'time=%f seconds\n'%(end - start)
+print ('time=%f seconds\n'%(end - start))
 
 import matplotlib
 import matplotlib.pyplot as plt

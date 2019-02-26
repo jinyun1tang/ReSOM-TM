@@ -1,15 +1,15 @@
 import numpy as np
 
 import ReSOM.resom_micdyn as resom_mic
+import ReSOM.resom_para as resom_para
 
 
+varid=resom_para.varid()
+reid=resom_para.reactionid(varid)
 
-varid=resom_mic.varid()
-reid=resom_mic.reactionid(varid)
-
-print 'number of bulk variables=%d, total variables=%d\n'%(varid.nbvars,varid.ntvars)
-print 'number of reactions=%d\n'%reid.nbreactions
-resompar=resom_mic.resomPar(varid)
+print ('number of bulk variables=%d, total variables=%d\n'%(varid.nbvars,varid.ntvars))
+print ('number of reactions=%d\n'%reid.nbreactions)
+resompar=resom_para.resomPar(varid)
 
 resompar.Kaff_Enz=resompar.Kaff_Enz+1.0
 resompar.vmax_depoly=resompar.vmax_depoly+1.e-5
@@ -35,8 +35,8 @@ newCell,rCO2_phys,newEnz,phyMortCell,mobileX=resom_mic.cell_physioloy(ystates,dt
 
 print (newCell,rCO2_phys,newEnz,phyMortCell,mobileX)
 
-print mobileX-newCell-rCO2_phys-newEnz
-csc_matrixp, csc_matrixd, csc_matrixs=resom_mic.set_reaction_matrix(varid, reid,resompar)
-print csc_matrixp.data
-print csc_matrixd.data
-print csc_matrixs.data
+print (mobileX-newCell-rCO2_phys-newEnz,
+    csc_matrixp, csc_matrixd, csc_matrixs=resom_mic.set_reaction_matrix(varid, reid,resompar))
+print (csc_matrixp.data)
+print (csc_matrixd.data)
+print (csc_matrixs.data)

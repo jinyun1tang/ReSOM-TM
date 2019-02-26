@@ -1,7 +1,8 @@
+#cython: language_level=2
 import numpy as np
 cimport numpy as np
 import cython
-from libc.math cimport abs
+from libc.math cimport abs, M_PI
 ctypedef np.float64_t dtype_t
 
 
@@ -53,6 +54,21 @@ def _cal_o2_diffbw(double temp, double phig, double phiw,
   diffo2_w=_get_o2diffusw(temp)
   diffo2_b=diffo2_g*taug*phig+diffo2_w*tauw*phiw*bo2
   return diffo2_b,diffo2_w
+
+def _conds_o2(double dz, double taug, double tauw, double Ras,
+  double tsoil, double vmsoi, double phig):
+  """
+  compute the conductance for soil-air o2 exchange
+  """
+  cdef:
+    double bo2, diffo2_b, diffo2_w
+    double conds
+  bo2=_bunsen_o2(tsoil)
+  diffo2_b,diffo2_w=_cal_o2_diffbw(tsoil, phig, vmsoi,
+    taug, tauw, bo2)
+
+  conds=1./(dz*(0.5*dz/diffo2_b+Ras))
+  return conds
 
 
 def _quadbigger(double a,double b,double c):
@@ -234,9 +250,9 @@ def _moldrup_tau(double sat, double chb, double s_sat):
   taug=epsi*(1.0-s_sat)**(3.0/chb)
   #equation (3)
   tauw=theta*(s_sat+1.e-10)**(chb/3.0-1.0)
-  return [taug,tauw]
+  return taug,tauw
 
-cdef inline double _cosby_psi(double sat, double psisat, double chb,
+cdef inline double _cosby_psi(double psisat, double chb,
   double s_sat):
   """compute the soil water potential
     s_sat: level of saturation
@@ -246,11 +262,20 @@ cdef inline double _cosby_psi(double sat, double psisat, double chb,
   return np.fmax(psisat*(s_sat+1.e-20)**(-chb),-1.e8)*1.e1
 
 
-def wfilm_thick(double sat, double psisat, double chb, s_sat):
+def wfilm_thick(double psisat, double chb, double s_sat, double tsoi):
   """
   compute water film thickness, m
   """
-  psi=_cosby_psi(sat, psisat, chb, s_sat)
+  cdef:
+    double rhow
+    double hfus
+  tfrz=273.15
+  hfus=3.337e5
+  rhow=1.e3
+  if tsoi < tfrz:
+    psi= hfus*(tfrz-tsoi)/tsoi * rhow  #Pa
+  else:
+    psi=_cosby_psi(psisat, chb, s_sat) #Pa
   delta = np.exp(-13.65-0.857*np.log(-psi*1.e-6))
   delta = np.fmax(delta,1.e-8)
   return delta
@@ -338,3 +363,53 @@ def csr_matmul(np.ndarray[dtype_t] data, np.ndarray[int] indices, \
     for k in range(indptr[j],indptr[j+1]):
       result[j] =result[j]+data[k]*v[indices[k]]
   return result
+
+def _fact(double tsoi, double n, double N_CH, double Delta_H_s, double Rgas):
+  cdef:
+    double cp
+    double Delta_Cp, Delta_G_E
+    double Delta_S_s
+
+  Delta_S_s=18.1
+  T_Hs=373.6
+  T_s=385.2
+
+  Delta_Cp = -46.0+30.*(1.-1.54*n**(-0.268))*N_CH
+  Delta_G_E= Delta_H_s-tsoi*Delta_S_s+Delta_Cp*((tsoi-T_Hs)-tsoi*np.log(tsoi/T_s))
+  fact=1./(1.+np.exp(-n*Delta_G_E/(Rgas*tsoi)))
+
+def _calKenz(double enzmwtgC, double Dw, double S_radius, double f0):
+  """
+  compute the affinity parameter
+  """
+  cdef:
+    double Kenz0
+    double kx1w
+
+  kx1w=4.0*M_PI*Dw*S_radius
+  return Kenz0, kx1w
+
+def _calcKmic(double enzmwtgC, double Dw, double S_radius, double f0):
+  """
+  compute the affinity parameter
+  """
+  cdef:
+    double Kmic0
+    double kx1w
+
+  kx1w=4.0*M_PI*Dw*S_radius
+  return Kmic0, kx1w
+
+def _calvsmGamma(double Db, double Dw0, double rm, double flm, double kx1w, double Ncell):
+  """
+  """
+  cdef:
+    double NA
+    double cell_dens
+    double vm
+    double vsmGamma
+  vm = 4./3.*M_PI*(rm)**3.
+  NA=6.0221e23
+  cell_dens=Ncell/(vm*NA)
+  vsmGamma=1.0+(vm*flm/(Dw0*rm*(rm+flm))+vm/(Db*(rm+flm)))/(4.*M_PI)*kx1w*cell_dens
+  return vsmGamma
