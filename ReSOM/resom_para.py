@@ -69,7 +69,7 @@ class resomPar():
 		self.vmax_depoly=np.ones((nE,varid.npolymers))*1.e-6 #depolymerization rate
 		self.Delta_E =np.ones((nE,varid.npolymers))
 		self.Delta_E_Eminerals=np.ones((nE,varid.nmineralAs))
-		self.Delta_G_X=np.ones(varid.nmicorbes)
+		self.Delta_G_X=np.ones(varid.nmicrobes)
 		self.micYVM = np.zeros(varid.nmicrobes)+0.3          #maintenance yield from structural biomass
 		self.micYXE = np.zeros(varid.nmicrobes)+0.5          #enzyme production yield from reserve
 		self.micYXV = np.zeros(varid.nmicrobes)+0.5          #structural biomass yield from reserve

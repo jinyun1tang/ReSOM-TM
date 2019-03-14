@@ -34,9 +34,8 @@ newCell,rCO2_phys,newEnz,phyMortCell,mobileX=resom_mic.cell_physioloy(ystates,dt
 
 
 print (newCell,rCO2_phys,newEnz,phyMortCell,mobileX)
-
-print (mobileX-newCell-rCO2_phys-newEnz,
-    csc_matrixp, csc_matrixd, csc_matrixs=resom_mic.set_reaction_matrix(varid, reid,resompar))
+csc_matrixp, csc_matrixd, csc_matrixs=resom_mic.set_reaction_matrix(varid, reid,resompar)
+print (mobileX-newCell-rCO2_phys-newEnz)
 print (csc_matrixp.data)
 print (csc_matrixd.data)
 print (csc_matrixs.data)

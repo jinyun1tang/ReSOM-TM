@@ -1,8 +1,8 @@
 import numpy as np
-import resom_mathlib as remath
+import ReSOM.resom_mathlib as remath
 
 from scipy.sparse import csr_matrix, csc_matrix
-from constants import dzsoi, Ras, Rgas
+from ReSOM.constants import dzsoi, Ras, Rgas
 
 
 
