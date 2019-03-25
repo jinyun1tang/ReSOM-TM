@@ -94,12 +94,23 @@ class resomPar():
 		self.o2_atm=8.
 		self.co2_atm=4.e-3
 
+class envPar():
+	def __init__(self):
+		self.sat=0.
+		self.chb=0.
+		self.psisat=0.
+		self.chb=0.
+
 
 def update_kinetics_par(varid, resompar, tsoil, envpar, vmsoi, veffpore):
 	"""
 	update the microbial kinetic parameters
+	vmsoi: soi moisture
+	veffpor: effective soil porosity
+	envpar:
 	"""
-
+	import ReSOM.resom_mathlib as remath
+	from ReSOM.constants import dzsoi, Ras, Rgas, poc_radius
 	#update diffusion parameters
 	phig=np.maximum(veffpore-vmsoi,0.)
 	s_sat=np.minimum(vmsoi/np.maximum(veffpore,envpar.sat),1.0)
@@ -109,24 +120,30 @@ def update_kinetics_par(varid, resompar, tsoil, envpar, vmsoi, veffpore):
 	Rgastsoi=Rgas*tsoil
 	for j in range(varid.nmicrobes):
 		#there is a strong assumption here that the thermal characteristics of a microbe and its enzyme is identical
+		#fraction of active enzymes
 		fact=remath._fact(tsoi, resompar.enz_n[j], resompar.N_CH[j], resompar.Delta_H_s[j], Rgas)
+		#for an enzyme producing microbe
 		if resompar.micPE_alpha[j] > 0.:
 			#updaet enzyme kinetic parameters, affinty and maximum processing rate
 			for k in range(varid.npolymers):
-				resompar.vmax_depoly[j,k]=resompar.vmax_depoly_0[j,k]*np.exp(-resompar.Delta_E[j,k]/(Rgastsoil))
-				resompar.Kaff_Enz[j,k],kx1w=remath._calKenz(resompar.vmax_depoly[j,k])
+				resompar.vmax_depoly[j,k]=resompar.vmax_depoly_0[j,k]*np.exp(-resompar.Delta_E[j,k]/(Rgastsoi))
+				resompar.Kaff_Enz[j,k],kx1w=remath._calKenz(resompar.vmax_depoly[j,k],resompar.Dw[j], poc_radius,fact)
 				Dw0=1.e-9
 				Db=Dw0*tauw
 				resompar.Kaff_Enz[j,k]=resompar.Kaff_Enz[j,k]*remath._calvsmGamma(Db, Dw0, rm, flm,  kx1w, Ncell)
 			#define enzyme affinity to soil minerals.
 			for k in range(varid.nmineralAs):
-				resompar.Kaff_Enz[j,k+varid.npolymers]=resompar.KaffE_minerals[j,k]*np.exp(-resompar.Delta_E_Eminerals[j,k]/(Rgastsoil))
+				resompar.Kaff_Enz[j,k+varid.npolymers]=resompar.KaffE_minerals[j,k]*np.exp(-resompar.Delta_E_Eminerals[j,k]/Rgastsoi)
+
 		#obtain substrate affinity
+
 		for k in range(varid.nmonomers):
-			resompar.vmax_umonomer[j,k]=resompar.vmax_umonomer_0[j,k]*np.exp(-resompar.monomer[k]/(Rgastsoil))
-			resompar.K_mic_monomer[j,k],kx1w=remath._calcKmic()
+			resompar.vmax_umonomer[j,k]=resompar.vmax_umonomer_0[j,k]*np.exp(-resompar.monomer[k]/(Rgastsoi))
+			Dw=1.e-9
+			resompar.K_mic_monomer[j,k],kx1w=remath._calcKmic(resompar.vmax_umonomer[j,k], Dw, resompar.cell_radius[j], resompar.f0[j,k])
 			resompar.K_mic_monomer[j,k]=resompar.K_mic_monomer[j,k]*remath._calvsmGamma(Db, Dw0, rm, flm,  kx1w, Ncell)
-		resompar.K_mic_oxygen[j]=remath._calcKmic()
+		DO2w=1.e-9
+		resompar.K_mic_oxygen[j]=remath._calcKmic(resompar.vmax_umonomer[j,k], DO2w, resompar.cell_radius[j], resompar.f0[j,k])
 		resompar.K_mic_oxygen[j]=resompar.K_mic_oxygen[j]*remath._calvsmGamma(Db, Dw0, rm, flm,  kx1w, Ncell)
 		#update the specific reserve turnover rate
 		resompar.micX_h0[j]=resompar.micX_hr[j]*fact*exp(-resompar.Delta_G_X[j]/Rgastsoi)

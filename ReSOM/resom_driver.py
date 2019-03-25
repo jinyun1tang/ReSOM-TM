@@ -1,16 +1,21 @@
 import numpy as np
 
-import resom_micdyn as rmicdyn
-import resom_ode as rode
-import resom_para
+import ReSOM.resom_micdyn as rmicdyn
+import ReSOM.resom_ode as rode
+import ResOM.resom_para as resom_para
+import ReSOM.resom_mathlib as remath
 #model initialization
-dtime=3600.0
-nsteps=24*365
+dtime=3600.0   #time step size
+nsteps=24*365  #number of integration steps
 varid=resom_para.varid()
 reid=resom_para.reactionid(varid)
 resompar=resom_para.resomPar(varid)
-
 substrate_input=np.zeros(varid.norgsubstrates)
+pct_sand=50.0
+pct_clay=20.0
+envpar=resom_para.envPar()
+
+envpar.chb, envpar.sat,envpar.psisat,envpar.ksat=remath._clapp_hornberg_par(pct_sand, pct_clay)
 
 ystates=np.zeros(varid.ntvars)
 

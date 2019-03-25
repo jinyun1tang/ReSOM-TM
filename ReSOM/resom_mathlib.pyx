@@ -239,6 +239,24 @@ def get_rerr(yc,yf):
     rerr = max(rtmp,rerr)
   return rerr
 
+def _clapp_hornberg_par(double pct_sand, double pct_clay, double fom=0.):
+    """Calculate Clapp Honberg parameters
+    chb: b constant
+    sat: soil porosity
+    psisat: mm
+    ksat: mm/s
+    """
+    cdef:
+      double chb, sat, psisat, ksat
+    chb=2.91+0.195*pct_clay
+    sat=0.489-0.00126*pct_sand
+    psisat=-10.0**(1.88-0.0131*pct_sand)
+    ksat=0.0070556*10.0**(-0.884+0.0153*pct_sand)
+    if fom > 0.:
+        chb=chb*(1.-fom)+fom*2.7
+        psisat=psisat*(1.-fom)+fom*(-10.3)
+        sat=sat*(1.-fom)+fom*0.9
+    return chb, sat,psisat,ksat
 
 def _moldrup_tau(double sat, double chb, double s_sat):
   """calculate tortuosity using Moldrup's (2003) equation"""
@@ -378,30 +396,43 @@ def _fact(double tsoi, double n, double N_CH, double Delta_H_s, double Rgas):
   Delta_G_E= Delta_H_s-tsoi*Delta_S_s+Delta_Cp*((tsoi-T_Hs)-tsoi*np.log(tsoi/T_s))
   fact=1./(1.+np.exp(-n*Delta_G_E/(Rgas*tsoi)))
 
-def _calKenz(double enzmwtgC, double Dw, double S_radius, double f0):
+def _calKenz(double k2, double Dw, double S_radius, double f0):
   """
   compute the affinity parameter
+  k2: maximum hydrolysis rate
+  Dw: enzyme diffusivity in the soil
+  S_radius: POC radius
+  f0: fraction of active enzyme
   """
   cdef:
     double Kenz0
     double kx1w
-
-  kx1w=4.0*M_PI*Dw*S_radius
+  NA=6.0221e23
+  kx1w=4.0 * M_PI * Dw * S_radius * NA
+  Kenz0=k2*f0/kx1w
   return Kenz0, kx1w
 
-def _calcKmic(double enzmwtgC, double Dw, double S_radius, double f0):
+def _calcKmic(double k2, double Dw, double cell_radius, double f0):
   """
   compute the affinity parameter
+  k2, cell specific substrate uptake rate
+  Dw, aqueous diffusivity of the substate molecule
+  cell_radius, radius of the microbial cell
+  f0, interception probability
   """
   cdef:
-    double Kmic0
+    double Kmic0   #mol substate molecule/m3
     double kx1w
+    double NA
+  NA=6.0221e23
+  kx1w=4.0*M_PI*Dw*cell_radius*NA*f0
+  Kmic0=k2/kx1w
 
-  kx1w=4.0*M_PI*Dw*S_radius
   return Kmic0, kx1w
 
 def _calvsmGamma(double Db, double Dw0, double rm, double flm, double kx1w, double Ncell):
   """
+  NA avogadro number
   """
   cdef:
     double NA
