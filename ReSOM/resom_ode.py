@@ -28,11 +28,23 @@ def bgc_integrate_sparse(nprimvars, nreactions, dtime,
   csc_csm_p,csc_csm_d,csc_csm,rrates0,ystates):
   """
     update the temporal derivative
+  Input:
+  nprimvars  : integer scalar, number of primary variables
+  nreactions : integer scalar, number of reactions
+  dtime      : float scalar, time step size
+  csc_csm_p  : sparse matrix, production
+  csc_csm_d  : sparse matrix, destruction
+  csc_csm    : sparse matrix, overall stoichiometry
+  rrate0     : vector, reference reaction rates
+  ystates    : vector, state variables
+  Output:
+  ystates_new: vector, updated state variable
+  rrates     : vector, updated reaction rates
   """
   it = 0
   itmax = 10
   rrates=np.zeros(rrates0.shape)
-  rrates=rrates0
+  rrates=rrates0.copy()
   while True:
     p_dt=csc_csm_p.dot(rrates)
     d_dt=csc_csm_d.dot(rrates)

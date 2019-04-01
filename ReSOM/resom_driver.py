@@ -2,7 +2,7 @@ import numpy as np
 
 import ReSOM.resom_micdyn as rmicdyn
 import ReSOM.resom_ode as rode
-import ResOM.resom_para as resom_para
+import ReSOM.resom_para as resom_para
 import ReSOM.resom_mathlib as remath
 #model initialization
 dtime=3600.0   #time step size
@@ -36,6 +36,7 @@ ystates0=np.copy(ystates[jj,:])
 
 tsoil=np.zeros(nsteps)+298.
 vmsoi=np.zeros(nsteps)+0.3
+veffpore=np.zeros(nsteps)+0.5
 import time
 
 start = time.time()
@@ -45,7 +46,7 @@ for nn in range(nsteps):
     #add external input
     ystates0[varid.mics_cum_cresp_co2]=0.0
     ystates0[varid.beg_mics_cummonomer:varid.end_mics_cummonomer+1]=0.0
-    resom_para.update_kinetics_par(varid, resompar, tsoil[nn], vmoist[nn])
+    resom_para.update_kinetics_par(varid, resompar, tsoil[nn], envpar, vmsoi[nn],veffpore[nn])
     ystates0=rmicdyn.resom_exinput(dtime, substrate_input, varid, ystates0)
     #run microbial model dynamic core
     rrates0,mic_umonomer, rCO2_phys, newcell, newEnz, phyMortCell, mobileX=\

@@ -395,6 +395,7 @@ def _fact(double tsoi, double n, double N_CH, double Delta_H_s, double Rgas):
   Delta_Cp = -46.0+30.*(1.-1.54*n**(-0.268))*N_CH
   Delta_G_E= Delta_H_s-tsoi*Delta_S_s+Delta_Cp*((tsoi-T_Hs)-tsoi*np.log(tsoi/T_s))
   fact=1./(1.+np.exp(-n*Delta_G_E/(Rgas*tsoi)))
+  return fact
 
 def _calKenz(double k2, double Dw, double S_radius, double f0):
   """

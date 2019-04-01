@@ -1,6 +1,9 @@
 import numpy as np
 
 class varid():
+	"""
+	structure holding the location of different variables within the vector ystates
+	"""
 	def __init__(self):
 		#substrates
 		#polymers
@@ -49,15 +52,24 @@ class varid():
 		self.ntvars=self.end_mineralA+1
 
 class reactionid():
+	"""
+	structure holding the ids of the reactions
+	"""
 	def __init__(self,varid):
+		#depolymerization
 		self.beg_depolymer=0
 		self.end_depolymer=self.beg_depolymer+varid.npolymers-1
+		#monomer uptake
 		self.beg_mics_upmonomer=self.end_depolymer+1
 		self.end_mics_upmonomer=self.beg_mics_upmonomer+varid.nmonomers-1
+		#respiratory oxygen consumption
 		self.mics_cresp_oxygen = self.end_mics_upmonomer+1
 		self.nbreactions =self.mics_cresp_oxygen+1
 
 class resomPar():
+	"""
+	parameters of resom
+	"""
 	def __init__(self,varid):
 		nE=varid.nenzymes
 		nS=varid.npolymers+varid.nmineralAs
@@ -67,29 +79,36 @@ class resomPar():
 		self.Kaff_Enz=np.ones((nE,nS))+0.1                   #enzyme-substrate affinity
 		self.vmax_depoly_0=np.ones((nE,varid.npolymers))*1.e-6
 		self.vmax_depoly=np.ones((nE,varid.npolymers))*1.e-6 #depolymerization rate
-		self.Delta_E =np.ones((nE,varid.npolymers))
-		self.Delta_E_Eminerals=np.ones((nE,varid.nmineralAs))
+		self.Delta_E_depoly =np.ones((nE,varid.npolymers))*30.e3
+		self.Delta_E_Eminerals=np.ones((nE,varid.nmineralAs))*45.e3
+		self.DwEnz=np.zeros(nE)+1.e-9
+		self.KaffE_minerals=np.ones((nE,varid.nmineralAs))*1.e0
 		self.Delta_G_X=np.ones(varid.nmicrobes)
 		self.micYVM = np.zeros(varid.nmicrobes)+0.3          #maintenance yield from structural biomass
 		self.micYXE = np.zeros(varid.nmicrobes)+0.5          #enzyme production yield from reserve
 		self.micYXV = np.zeros(varid.nmicrobes)+0.5          #structural biomass yield from reserve
 		self.micPE_alpha=np.zeros(varid.nmicrobes)+0.1       #maximum enzyme production rate
 		self.micX_hr= np.zeros(varid.nmicrobes)+0.1
-		self.micX_h = np.zeros(varid.nmicrobes)+0.1       #reserve mobilization rate
 		self.micX_h0= np.zeros(varid.nmicrobes)+0.1
 		self.micV_mr= np.zeros(varid.nmicrobes)+1.e-7
-		self.micV_m = self.micV_mr        #somatic maintenance
+		self.cell_radius=np.zeros(varid.nmicrobes)+1.e-6     #cell radius, m
+		self.micV_m = self.micV_mr                           #somatic maintenance
 		self.EnziDek= np.zeros(varid.nmicrobes)+1.e-6
 		self.miciMort=np.zeros(varid.nmicrobes)+1.e-7
 		self.micPerstV=np.zeros(varid.nmicrobes)+0.01
 		self.K_mic_monomer=np.zeros((varid.nmicrobes,varid.nmonomers))+1.e-2
 		self.K_minerals_monomer=np.zeros((varid.nmineralAs,varid.nmonomers))+1.0
-		self.nosc_monomer=np.zeros(varid.nmonomers)    #nominal oxidation status
+		self.nosc_monomer=np.zeros(varid.nmonomers)          #nominal oxidation status
 		self.YX_monomer=np.zeros(varid.nmonomers)+0.5
+		self.Delta_monomer=np.zeros(varid.nmonomers)+20.e3
 		self.vmax_umonomer_0=np.ones((varid.nmicrobes,varid.nmonomers))*1.e-6
 		self.vmax_umonomer=self.vmax_umonomer_0
-		self.K_mic_oxygen=np.ones(varid.nmicrobes)*1.e-3
-		self.YX2necm=np.zeros(varid.nmicrobes)+0.05    #fraction of lysed cell go to monomers
+		self.vmax_umonomer_o2=np.ones(varid.nmicrobes)*300.
+		self.K_mic_oxygen=np.ones((varid.nmicrobes))*1.e-3
+		self.f0=np.ones((varid.nmicrobes,varid.nmonomers))*0.5
+		self.f0_o2=np.ones(varid.nmicrobes)*0.5
+		self.YX2necm=np.zeros(varid.nmicrobes)+0.05          #fraction of lysed cell go to monomers
+		self.Delta_G_V=np.ones(varid.nmicrobes)*30.e3
 		self.conds_o2=1.e-3
 		self.o2_atm=8.
 		self.co2_atm=4.e-3
@@ -110,24 +129,24 @@ def update_kinetics_par(varid, resompar, tsoil, envpar, vmsoi, veffpore):
 	envpar:
 	"""
 	import ReSOM.resom_mathlib as remath
-	from ReSOM.constants import dzsoi, Ras, Rgas, poc_radius
+	from ReSOM.constants import dzsoi, Ras, Rgas, poc_radius, Ncell, rm
 	#update diffusion parameters
 	phig=np.maximum(veffpore-vmsoi,0.)
 	s_sat=np.minimum(vmsoi/np.maximum(veffpore,envpar.sat),1.0)
 	taug, tauw=remath._moldrup_tau(veffpore, envpar.chb, s_sat)
 	resompar.conds_o2=remath._conds_o2(dzsoi, taug, tauw, Ras, tsoil, vmsoi, phig)
-	flm=remath.wfilm_thick(envpar.psisat, envpar.chb, s_sat, tsoi)
+	flm=remath.wfilm_thick(envpar.psisat, envpar.chb, s_sat, tsoil)
 	Rgastsoi=Rgas*tsoil
 	for j in range(varid.nmicrobes):
 		#there is a strong assumption here that the thermal characteristics of a microbe and its enzyme is identical
 		#fraction of active enzymes
-		fact=remath._fact(tsoi, resompar.enz_n[j], resompar.N_CH[j], resompar.Delta_H_s[j], Rgas)
+		fact=remath._fact(tsoil, resompar.enz_n[j], resompar.N_CH[j], resompar.Delta_H_s[j], Rgas)
 		#for an enzyme producing microbe
 		if resompar.micPE_alpha[j] > 0.:
 			#updaet enzyme kinetic parameters, affinty and maximum processing rate
 			for k in range(varid.npolymers):
-				resompar.vmax_depoly[j,k]=resompar.vmax_depoly_0[j,k]*np.exp(-resompar.Delta_E[j,k]/(Rgastsoi))
-				resompar.Kaff_Enz[j,k],kx1w=remath._calKenz(resompar.vmax_depoly[j,k],resompar.Dw[j], poc_radius,fact)
+				resompar.vmax_depoly[j,k]=resompar.vmax_depoly_0[j,k]*np.exp(-resompar.Delta_E_depoly[j,k]/Rgastsoi)
+				resompar.Kaff_Enz[j,k],kx1w=remath._calKenz(resompar.vmax_depoly[j,k],resompar.DwEnz[j], poc_radius,fact)
 				Dw0=1.e-9
 				Db=Dw0*tauw
 				resompar.Kaff_Enz[j,k]=resompar.Kaff_Enz[j,k]*remath._calvsmGamma(Db, Dw0, rm, flm,  kx1w, Ncell)
@@ -138,13 +157,13 @@ def update_kinetics_par(varid, resompar, tsoil, envpar, vmsoi, veffpore):
 		#obtain substrate affinity
 
 		for k in range(varid.nmonomers):
-			resompar.vmax_umonomer[j,k]=resompar.vmax_umonomer_0[j,k]*np.exp(-resompar.monomer[k]/(Rgastsoi))
+			resompar.vmax_umonomer[j,k]=resompar.vmax_umonomer_0[j,k]*np.exp(-resompar.Delta_monomer[k]/Rgastsoi)
 			Dw=1.e-9
 			resompar.K_mic_monomer[j,k],kx1w=remath._calcKmic(resompar.vmax_umonomer[j,k], Dw, resompar.cell_radius[j], resompar.f0[j,k])
 			resompar.K_mic_monomer[j,k]=resompar.K_mic_monomer[j,k]*remath._calvsmGamma(Db, Dw0, rm, flm,  kx1w, Ncell)
-		DO2w=1.e-9
-		resompar.K_mic_oxygen[j]=remath._calcKmic(resompar.vmax_umonomer[j,k], DO2w, resompar.cell_radius[j], resompar.f0[j,k])
+			DO2w=1.e-9
+		resompar.K_mic_oxygen[j], kx1w=remath._calcKmic(resompar.vmax_umonomer_o2[j], DO2w, resompar.cell_radius[j], resompar.f0_o2[j])
 		resompar.K_mic_oxygen[j]=resompar.K_mic_oxygen[j]*remath._calvsmGamma(Db, Dw0, rm, flm,  kx1w, Ncell)
 		#update the specific reserve turnover rate
-		resompar.micX_h0[j]=resompar.micX_hr[j]*fact*exp(-resompar.Delta_G_X[j]/Rgastsoi)
-		resompar.micV_m[j] =resompar.micV_mr[j]*exp(-resompar.Delta_G_V[j]/Rgastsoi)
+		resompar.micX_h0[j]=resompar.micX_hr[j]*fact*np.exp(-resompar.Delta_G_X[j]/Rgastsoi)
+		resompar.micV_m[j] =resompar.micV_mr[j]*np.exp(-resompar.Delta_G_V[j]/Rgastsoi)

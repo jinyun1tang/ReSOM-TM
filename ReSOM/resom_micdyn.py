@@ -18,6 +18,18 @@ def resom_exinput(dtime, substrate_input, varid, ystates0):
 def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 	"""
 	 doing microbial cell physiology
+	Input:
+	ystates     : vector, model state variables
+	dtime       : scalar, time step size
+	resomPar    : structure, microbial parameters
+	varid       : structure, variable labels
+	fo2         : vector, fraction of binded oxygen acceptors
+	Output:
+	newCell     : vector, cell growth rate, shrinking when <0
+ 	rCO2_phys   : vector, physiological CO2 production rate
+	newEnz      : vector, new enzyme synthesis rate
+	phyMortCell : vector, microbial death rate
+	mobileX     : vector, reserve mobilization rate
 	"""
 	newCell= np.zeros(varid.nmicrobes)     #cell growth or shrinking
 	rCO2_m = np.zeros(varid.nmicrobes)     #co2 respiration associated with maintenance
@@ -34,22 +46,23 @@ def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 		#determine reserve density
 		if ystates[varid.beg_microbeV+j]>0.0:
 			ee=ystates[varid.beg_microbeX+j]/ystates[varid.beg_microbeV+j]  #reserve density
-			dm = resomPar.micX_h[j]*ee-resomPar.micV_m[j]            #total avaiable reserve flux for non-maintenance use
+			dmg=resomPar.micX_h0[j]*fo2[j]*ee
+			dm = dmg-resomPar.micV_m[j]            #total avaiable reserve flux for non-maintenance use
+			#print('dm=%e,dmg=%e,resomPar.micV_m[j]=%e'%(dm,dmg,resomPar.micV_m[j]))
 			if dm <= 0.0:
 				#check whether electron acceptor limitation is on
 				dm0=resomPar.micX_h0[j]*ee-resomPar.micV_m[j]
+				#print('resomPar.micX_h0[j]=%f,ee=%f,resomPar.micV_m[j]=%f'%(resomPar.micX_h0[j],ee,resomPar.micV_m[j]))
 				if dm0<=0.0:
 					#cell shrink because reserve limitation
-					newCell[j]=dm/(ee+resomPar.micYVM[j])
-					rCO2_m[j]=(resomPar.micX_h[j]-newCell[j])*ee-newCell[j]
-					rCO2_g[j]=0.0
-					rCO2_e[j]=0.0
-					newEnz[j]=0.0
+					newCell[j]=dm/(ee+resomPar.micYVM[j])    # < 0.
+					rCO2_m[j]=(resomPar.micX_h0[j]*fo2[j]-newCell[j])*ee-newCell[j] #amount co2 for maitanance
 				else:
 					#electron acceptor limitation is on
 					#reserve is not limiting, maintenance deficit is
 					#translated into mortality
 					emortCell[j]=-dm  #enhanced mortality due to unfulfilled maintenance
+					rCO2_m[j]=dmg
 			else:
 				#print "active growth, iterate using the secant method"
 				newCell[j]=dm/(ee+(1.0+resomPar.micPE_alpha[j])/resomPar.micYXV[j])
@@ -60,7 +73,7 @@ def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 			imortCell[j] = resomPar.miciMort[j]                  #intrinsinc mortality
 			phyMortCell[j]=(emortCell[j]+imortCell[j])* \
 				ystates[varid.beg_microbeV+j]/(resomPar.micPerstV[j]+ystates[varid.beg_microbeV+j])
-			mobileX[j]=(resomPar.micX_h[j]-newCell[j])*ee
+			mobileX[j]=(resomPar.micX_h0[j]*fo2[j]-newCell[j])*ee
 			rCO2_phys[j]=rCO2_m[j]+rCO2_g[j]+rCO2_e[j]
 			yee=ee-dtime*mobileX[j]
 			if yee<0.:
@@ -92,6 +105,13 @@ def depolymerization(ystates, varid, resomPar):
 def uptake_monomer(ystates, varid, resomPar):
 	"""
 	monomer uptake
+	input:
+	ystates  : vector, model state variables
+	varid    : structure, variable labels
+	resomPar : structure, microbial parameters
+	output:
+	mic_upmonomer : matrix, monomer uptake rate
+	fo2           : vector, fraction of binded oxygen acceptor
 	"""
 	S1=ystates[varid.beg_monomer:varid.end_monomer+1]
 	S2=np.array([ystates[varid.oxygen]])
@@ -117,13 +137,24 @@ def uptake_monomer(ystates, varid, resomPar):
 	Kffs=np.zeros((nE,nS))
 	Kffs[:,:]=resomPar.K_mic_oxygen
 	fo2=remath.ecanorm(E, S1, Kffs, nE, nS)
-
 	return mic_upmonomer,fo2
 
 def resom_dyncore(ystates, dtime, varid, reactionid, resomPar):
 	"""
-	define the resom microbial dynamics
-	rrate
+	resom microbial dynamics
+	Inputs:
+	ystates      : vector, model state variables
+	dtime        : scalar, model time step
+	reactionid   : structure, reaction labels
+	resomPar     : structure, microbial parameters
+	Outputs:
+	rrates       : vector reaction rates
+    mic_umonomer : matrix, monomer uptake rate
+	rCO2_phys    : vector, physiological CO2 production rate
+ 	newcell      : vector, cell growth rate, actively growing if >0
+	newEnz       : vector, enzyme production rate
+	phyMortCell  : vector, mortality rate
+ 	mobileX      : vector, reserve mobilization rate
 	"""
 	rrates=np.zeros(reactionid.nbreactions)
 	de_polymer=depolymerization(ystates, varid, resomPar)
@@ -146,7 +177,7 @@ def resom_dyncore(ystates, dtime, varid, reactionid, resomPar):
 		rrates[reactionid.beg_mics_upmonomer+j]=np.sum(mic_umonomer[:,j])
 	#carbon consuming respiration
 	rrates[reactionid.mics_cresp_oxygen]=np.sum(rCO2_phys)
-	return rrates,mic_umonomer, rCO2_phys, newcell, newEnz, phyMortCell, mobileX
+	return rrates, mic_umonomer, rCO2_phys, newcell, newEnz, phyMortCell, mobileX
 
 def set_polymer_monomer_matrix():
 	"""
@@ -164,7 +195,7 @@ def set_polymer_monomer_matrix():
 
 def set_reaction_matrix(varid, reactionid, resompar):
 	"""
-	define the reaction matrix
+	define the reaction matrix, between polymers, monomers, and oxygen
 	"""
 
 	matrixs=np.zeros((varid.nbvars, reactionid.nbreactions))
@@ -202,22 +233,38 @@ def set_reaction_matrix(varid, reactionid, resompar):
 	csc_matrixs=csc_matrix(matrixs)
 	return csc_matrixp, csc_matrixd, csc_matrixs
 
+
 def updates_microbes(varid, reactionid, resompar, ystates, dtime, rrates0,rrates, \
 	mic_umonomer,rCO2_phys,newCell,newEnz,phyMortCell,mobileX):
 	"""
 	update microbial biomass
+	varid       : structure, variable lables
+	reactionid  : structure, reaction labels
+	resompar    : structure, microbial parameters
+	ystates     : vector, model state variable vector
+	dtime       : scalar, model time step
+	rrates0     : vector, reference reaction rates
+	rrates      : vector, updated reaction rates after accounting for substrate limitation
+	mic_umonomer: matrix, reference monomer uptake rate
+ 	rCO2_phys   : vector, reference physiological CO2 production rate
+	newCell     : vector, reference cell growth rate, shrinking when < 0
+	newEnz      : vector, refnerece enzyme synthesis rate
+	phyMortCell : vector, reference microbial mortality
+	mobileX     : vector, reference reserve mobilization rate
 	"""
 	ystatesf=np.copy(ystates)
 	#obtain the actual flux limiter
+	#oxygen
 	if rrates0[reactionid.mics_cresp_oxygen] > 0.:
+		#the strength of oxygen limitation
 		foxygen=rrates[reactionid.mics_cresp_oxygen]/rrates0[reactionid.mics_cresp_oxygen]
 	else:
 		foxygen=0.0
+	#organic monomers
 	fmonomer=np.zeros(varid.nmonomers)
 	for j in range(varid.nmonomers):
 		if rrates0[reactionid.beg_mics_upmonomer+j] > 0.0:
 			fmonomer[j]=rrates[reactionid.beg_mics_upmonomer+j]/rrates0[reactionid.beg_mics_upmonomer+j]
-
 
 	for j in range(varid.nmonomers):
 		if fmonomer[j] > 0.0:
@@ -234,17 +281,19 @@ def updates_microbes(varid, reactionid, resompar, ystates, dtime, rrates0,rrates
 		ystatesf[varid.beg_microbeV+k]=ystatesf[varid.beg_microbeV+k]*\
 			np.exp(dtime*newCell[k]*foxygen)
 
-		#reserve goes to necromass
+		#reserve biomass goes to necromass
 		ystate=ystatesf[varid.beg_microbeX+k]*np.exp(-dtime*phyMortCell[k])
 		ystatesf[varid.polymer_necm]=ystatesf[varid.polymer_necm]-\
 			(ystate-ystatesf[varid.beg_microbeX+k])*resompar.YX2necm[k]
 		ystatesf[varid.beg_monomer]=ystatesf[varid.beg_monomer]-\
 			(ystate-ystatesf[varid.beg_microbeX+k])*(1.-resompar.YX2necm[k])
 		ystatesf[varid.beg_microbeX+k]=ystate
-		#structural goes to necromass
+
+		#structural biomass goes to necromass
 		ystate=ystatesf[varid.beg_microbeV+k]*np.exp(-dtime*phyMortCell[k])
 		ystatesf[varid.polymer_necm]=ystatesf[varid.polymer_necm]-ystate+ystatesf[varid.beg_microbeV+k]
 		ystatesf[varid.beg_microbeV+k]=ystate
+
 		#enzyme production
 		ystatesf[varid.beg_enzyme+k]=ystatesf[varid.beg_enzyme+k]+\
 			newEnz[k]*foxygen*ystatesf[varid.beg_microbeV+k]*dtime
