@@ -45,6 +45,8 @@ def _cal_o2_diffbw(double temp, double phig, double phiw,
   """
     return bulk and aqueous diffusivity of o2
     temp: temperature, kelvin
+    phig: gas filled volume
+    phiw: water filled volume
     taug: gaseous tortuosity
     tauw: aqueous tortuosity
     bo2: bunsen coefficient
@@ -59,11 +61,19 @@ def _conds_o2(double dz, double taug, double tauw, double Ras,
   double tsoil, double vmsoi, double phig):
   """
   compute the conductance for soil-air o2 exchange
+  dz: layer thickness
+  taug: gaseous tortuosity
+  tauw: aqueous tortuosity
+  Ras: atmospheric resistance, s/m
+  tsoi: soil temperature, K
+  vmsoi: soil moisture, v/v
+  phig: air-filled porosity
   """
   cdef:
     double bo2, diffo2_b, diffo2_w
     double conds
   bo2=_bunsen_o2(tsoil)
+
   diffo2_b,diffo2_w=_cal_o2_diffbw(tsoil, phig, vmsoi,
     taug, tauw, bo2)
 
@@ -397,7 +407,7 @@ def _fact(double tsoi, double n, double N_CH, double Delta_H_s, double Rgas):
   fact=1./(1.+np.exp(-n*Delta_G_E/(Rgas*tsoi)))
   return fact
 
-def _calKenz(double k2, double Dw, double S_radius, double f0):
+def _calKenz(double k2, double Dw, double S_radius):
   """
   compute the affinity parameter
   k2: maximum hydrolysis rate
@@ -410,7 +420,7 @@ def _calKenz(double k2, double Dw, double S_radius, double f0):
     double kx1w
   NA=6.0221e23
   kx1w=4.0 * M_PI * Dw * S_radius * NA
-  Kenz0=k2*f0/kx1w
+  Kenz0=k2/kx1w
   return Kenz0, kx1w
 
 def _calcKmic(double k2, double Dw, double cell_radius, double f0):

@@ -86,37 +86,65 @@ def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 	return newCell,rCO2_phys,newEnz,phyMortCell,mobileX
 
 def depolymerization(ystates, varid, resomPar):
+	"""
+	compute depolymerization
+	Inputs:
+		ystates: vector, state variable
+		varid: structure holding variable ids
+		resomPar: structure holding model parameters
+	Output:
+		depolymer: matrix of depolymerization flux
+	"""
+	from ReSOM.constants import pom_B,mC_amino
 	#enzyme hydrolysis, Fp
 	#collect substrates
 	substrates = np.concatenate((ystates[varid.beg_polymer:varid.end_polymer+1], \
 		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
+	for j in range(varid.npolymers):
+		#conver into sorbtion surfaces
+		substrates[j]=substrates[j]/pom_B
 	#collect consumers
 	consumers=ystates[varid.beg_enzyme:varid.end_enzyme+1]
+	for j in range(varid.nenzymes):
+		consumers[j]=consumers[j]/(mC_amino*resomPar.enz_n[j])
 	nS = np.size(substrates)
 	nE = np.size(consumers)
 	#collect matrix of affinity parameters
 	Kffs=resomPar.Kaff_Enz
+	print('Kaff')
+	print(Kffs)
+	print(consumers)
+	print(substrates)
 	sc_ij=remath.eca(consumers, substrates, Kffs, nE, nS)
 	#enzyme degradation
 	de_polymer=sc_ij[0:nE,0:varid.npolymers]*resomPar.vmax_depoly
-
+	print('depolymer')
+	print(de_polymer)
 	return de_polymer
 
 def uptake_monomer(ystates, varid, resomPar):
 	"""
 	monomer uptake
 	input:
-	ystates  : vector, model state variables
-	varid    : structure, variable labels
-	resomPar : structure, microbial parameters
+		ystates  : vector, model state variables
+		varid    : structure, variable labels
+		resomPar : structure, microbial parameters
 	output:
-	mic_upmonomer : matrix, monomer uptake rate
-	fo2           : vector, fraction of binded oxygen acceptor
+		mic_upmonomer : matrix, monomer uptake rate
+		fo2           : vector, fraction of binded oxygen acceptor
 	"""
+	from ReSOM.constants import cmass_to_cell
 	S1=ystates[varid.beg_monomer:varid.end_monomer+1]
+	#convert into mols of monomers
+	for j in range(varid.nmonomers):
+		S1[j]=S1[j]/resomPar.catom_monomer[j]
+
 	S2=np.array([ystates[varid.oxygen]])
 	E =np.concatenate((ystates[varid.beg_microbeV:varid.end_microbeV+1], \
 		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
+	#conver into mol of cells
+	for j in range(varid.nmicrobes):
+		E[j]=E[j]*cmass_to_cell
 	nS1=np.size(S1)
 	nS2=np.size(S2)
 	nE =np.size(E)
@@ -129,7 +157,9 @@ def uptake_monomer(ystates, varid, resomPar):
 	#sc_ijk(nE,nS1,nS2)
 	sc_ijk=remath.supeca(E, S1, S2, K1, K2, nE, nS1, nS2)
 	mic_upmonomer=sc_ijk[0:varid.nmicrobes,0:varid.nmonomers,0]*resomPar.vmax_umonomer
-
+	print('monomer')
+	print(mic_upmonomer)
+	#gaseous oxygen uptake
 	S1=np.array([ystates[varid.oxygen]])
 	E =ystates[varid.beg_microbeV:varid.end_microbeV+1]
 	nS=np.size(S1)
@@ -143,18 +173,18 @@ def resom_dyncore(ystates, dtime, varid, reactionid, resomPar):
 	"""
 	resom microbial dynamics
 	Inputs:
-	ystates      : vector, model state variables
-	dtime        : scalar, model time step
-	reactionid   : structure, reaction labels
-	resomPar     : structure, microbial parameters
+		ystates      : vector, model state variables
+		dtime        : scalar, model time step
+		reactionid   : structure, reaction labels
+		resomPar     : structure, microbial parameters
 	Outputs:
-	rrates       : vector reaction rates
-    mic_umonomer : matrix, monomer uptake rate
-	rCO2_phys    : vector, physiological CO2 production rate
- 	newcell      : vector, cell growth rate, actively growing if >0
-	newEnz       : vector, enzyme production rate
-	phyMortCell  : vector, mortality rate
- 	mobileX      : vector, reserve mobilization rate
+		rrates       : vector reaction rates
+    	mic_umonomer : matrix, monomer uptake rate
+		rCO2_phys    : vector, physiological CO2 production rate
+ 		newcell      : vector, cell growth rate, actively growing if >0
+		newEnz       : vector, enzyme production rate
+		phyMortCell  : vector, mortality rate
+ 		mobileX      : vector, reserve mobilization rate
 	"""
 	rrates=np.zeros(reactionid.nbreactions)
 	de_polymer=depolymerization(ystates, varid, resomPar)

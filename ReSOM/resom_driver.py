@@ -6,7 +6,8 @@ import ReSOM.resom_para as resom_para
 import ReSOM.resom_mathlib as remath
 #model initialization
 dtime=3600.0   #time step size
-nsteps=24*365  #number of integration steps
+nsteps=48*365  #number of integration steps
+nsteps=48
 varid=resom_para.varid()
 reid=resom_para.reactionid(varid)
 resompar=resom_para.resomPar(varid)
@@ -27,6 +28,10 @@ ystates=np.zeros((24,varid.ntvars))
 for j in range(varid.nmicrobes):
     ystates[0,varid.beg_microbeX+j]=1.e-3
     ystates[0,varid.beg_microbeV+j]=1.e-3
+    ystates[0,varid.beg_enzyme+j]=1.e-2
+ystates[0,varid.beg_polymer]=100.
+ystates[0,varid.beg_monomer]=10.
+
 co2_flx=np.zeros(24)
 #obtain the reaction matrix for the bulk reactions
 csc_matrixp, csc_matrixd, csc_matrixs=rmicdyn.set_reaction_matrix(varid, reid,resompar)
@@ -41,6 +46,7 @@ import time
 
 start = time.time()
 
+resom_para.update_microbial_par(varid,resompar)
 for nn in range(nsteps):
     ystates[jj,:]=ystates0
     #add external input
@@ -86,12 +92,22 @@ import matplotlib.pyplot as plt
 #print ystatesf[1,:]
 
 tt=range(nsteps)
-ax1=plt.subplot(2, 1, 1)
+ax1=plt.subplot(4, 1, 1)
 ax1.plot(tt,ystatesf[:,varid.beg_polymer])
-ax1.plot(tt,ystatesf[:,varid.beg_monomer])
-ax1.legend(['Polymer','Monomer'])
-ax2=plt.subplot(2, 1, 2)
-ax2.plot(tt,ystatesf[:,varid.beg_enzyme])
+
+ax1.legend(['Polymer'])
+ax2=plt.subplot(4, 1, 2)
+
+ax2.plot(tt,ystatesf[:,varid.beg_microbeV])
+ax2.plot(tt,ystatesf[:,varid.beg_microbeX])
+ax2.legend(['MicrobeV','MicrobeX'])
+ax3=plt.subplot(4, 1, 3)
+ax3.plot(tt,ystatesf[:,varid.beg_monomer])
+ax3.plot(tt,ystatesf[:,varid.beg_enzyme])
+ax3.legend(['Monomer','Enzyme'])
+ax4=plt.subplot(4, 1, 4)
+ax4.plot(tt,ystatesf[:,varid.oxygen])
+ax4.legend(['oxygen'])
 #ax2.plot(tt,ystatesf[:,varid.beg_microbeX])
 #ax2.legend(['CO2','microbeX'])
 plt.show()
