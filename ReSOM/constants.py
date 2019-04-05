@@ -1,6 +1,6 @@
 
 import math
-__all__=['dzsoi','Ras','Rgas', 'pom_radius','pom_B','mC_amino','cmass_to_cell']
+__all__=['dzsoi','Ras','Rgas', 'pom_radius','pom_B','mC_amino','cmass_to_cell', 'M_Acef']
 
 
 dzsoi=0.1          # 10 cm
@@ -23,3 +23,4 @@ mC_amino=64./12.   #mean mol C per mole amino acids
 mwt_amino=136.75   #mean molecular weight of amino acids
 cmass_to_cell=2.68e-11  #mol cells (mol C)-1
 dfrac=2.52         #fractal dimension
+M_Acef=catomw/(pom_fc*Na*pom_dens*math.pi)  #mol of enzymes per mol C pom can bind multiplied enz_radius^3

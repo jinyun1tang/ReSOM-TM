@@ -111,15 +111,15 @@ def depolymerization(ystates, varid, resomPar):
 	nE = np.size(consumers)
 	#collect matrix of affinity parameters
 	Kffs=resomPar.Kaff_Enz
-	print('Kaff')
-	print(Kffs)
-	print(consumers)
-	print(substrates)
+#	print('Kaff')
+#	print(Kffs)
+#	print(consumers)
+#	print(substrates)
 	sc_ij=remath.eca(consumers, substrates, Kffs, nE, nS)
 	#enzyme degradation
-	de_polymer=sc_ij[0:nE,0:varid.npolymers]*resomPar.vmax_depoly
-	print('depolymer')
-	print(de_polymer)
+	de_polymer=sc_ij[0:nE,0:varid.npolymers]*resomPar.vmax_depoly*pom_B
+#	print('depolymer')
+#	print(de_polymer)
 	return de_polymer
 
 def uptake_monomer(ystates, varid, resomPar):
@@ -157,8 +157,8 @@ def uptake_monomer(ystates, varid, resomPar):
 	#sc_ijk(nE,nS1,nS2)
 	sc_ijk=remath.supeca(E, S1, S2, K1, K2, nE, nS1, nS2)
 	mic_upmonomer=sc_ijk[0:varid.nmicrobes,0:varid.nmonomers,0]*resomPar.vmax_umonomer
-	print('monomer')
-	print(mic_upmonomer)
+	#print('monomer')
+	#print(mic_upmonomer)
 	#gaseous oxygen uptake
 	S1=np.array([ystates[varid.oxygen]])
 	E =ystates[varid.beg_microbeV:varid.end_microbeV+1]

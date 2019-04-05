@@ -6,8 +6,8 @@ import ReSOM.resom_para as resom_para
 import ReSOM.resom_mathlib as remath
 #model initialization
 dtime=3600.0   #time step size
-nsteps=48*365  #number of integration steps
-nsteps=48
+nsteps=24*365*20  #number of integration steps
+#nsteps=48
 varid=resom_para.varid()
 reid=resom_para.reactionid(varid)
 resompar=resom_para.resomPar(varid)
@@ -29,8 +29,8 @@ for j in range(varid.nmicrobes):
     ystates[0,varid.beg_microbeX+j]=1.e-3
     ystates[0,varid.beg_microbeV+j]=1.e-3
     ystates[0,varid.beg_enzyme+j]=1.e-2
-ystates[0,varid.beg_polymer]=100.
-ystates[0,varid.beg_monomer]=10.
+#ystates[0,varid.beg_polymer]=100.
+#ystates[0,varid.beg_monomer]=10.
 
 co2_flx=np.zeros(24)
 #obtain the reaction matrix for the bulk reactions

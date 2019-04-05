@@ -133,7 +133,7 @@ def update_microbial_par(varid, resompar):
 	"""
 	update constant microbial parameters
 	"""
-	from ReSOM.constants import pom_radius, mC_amino, pom_B, cmass_to_cell
+	from ReSOM.constants import pom_radius, mC_amino, pom_B, cmass_to_cell, M_Acef
 	for j in range(varid.nmicrobes):
 		resompar.A_enz[j]=4.*(pom_radius/resompar.Enz_radius[j])**2  # maximum number of enzymes binding site per pom
 		resompar.k2_uo2[j]=resompar.k2_uo2[j]*resompar.mic_tp_o2[j]
@@ -142,8 +142,8 @@ def update_microbial_par(varid, resompar):
 			resompar.vmax_umonomer_0[j,k]=resompar.k2_umonomer[j,k]*resompar.catom_monomer[k]
 			#print('vmax_monomer=%e mol C s-1'%resompar.vmax_umonomer_0[j,k]*cmass_to_cell)
 		for k in range(varid.npolymers):
-			resompar.vmax_depoly_0[j,k]=resompar.k2_enz[j,k]*resompar.A_enz[j]*resompar.catom_monomer[k]   #mol monomer s-1 per POM particle
-			print('vmax_e=%e mol monomer s-1'%(resompar.vmax_depoly_0[j,k]/pom_B))
+			resompar.vmax_depoly_0[j,k]=resompar.k2_enz[j,k]*M_Acef/resompar.Enz_radius[j]**3   #s-1, assuming Enz in mol m-3, and pom in mol C m-3
+#			print('vmax_e=%e mol monomer s-1'%(resompar.vmax_depoly_0[j,k]))
 
 def update_kinetics_par(varid, resompar, tsoil, envpar, vmsoi, veffpore):
 	"""
@@ -175,9 +175,10 @@ def update_kinetics_par(varid, resompar, tsoil, envpar, vmsoi, veffpore):
 				resompar.Kaff_Enz[j,k],kx1w=remath._calKenz(resompar.k2_enz[j,k],Dw0, pom_radius)
 				#obtain the affinity in the unit of mol enzyme per m3
 				resompar.Kaff_Enz[j,k]= resompar.Kaff_Enz[j,k]*resompar.A_enz[j]
+				#resompar.Kaff_Enz[j,k]= resompar.Kaff_Enz[j,k]/(mC_amino*resompar.enz_n[j])
 				#apply the diffusition limitation
-				resompar.Kaff_Enz[j,k]=resompar.Kaff_Enz[j,k]/tauw
-				print("Kaff_Enz=%f mol enz m-3, tau=%f"%(resompar.Kaff_Enz[j,k],tauw))
+				resompar.Kaff_Enz[j,k]=resompar.Kaff_Enz[j,k]/(tauw*vmsoi)
+				#print("Kaff_Enz=%f mol enz m-3, tau=%f"%(resompar.Kaff_Enz[j,k],tauw))
 				resompar.vmax_depoly[j,k]=resompar.vmax_depoly_0[j,k]*np.exp(-resompar.Delta_E_depoly[j,k]*iRgastsoi)
 			#define enzyme affinity to soil minerals.
 			for k in range(varid.nmineralAs):
