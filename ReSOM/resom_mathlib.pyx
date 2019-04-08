@@ -301,7 +301,7 @@ def wfilm_thick(double psisat, double chb, double s_sat, double tsoi):
   hfus=3.337e5
   rhow=1.e3
   if tsoi < tfrz:
-    psi= hfus*(tfrz-tsoi)/tsoi * rhow  #Pa
+    psi= -hfus*(tfrz-tsoi)/tsoi * rhow  #Pa
   else:
     psi=_cosby_psi(psisat, chb, s_sat) #Pa
   delta = np.exp(-13.65-0.857*np.log(-psi*1.e-6))

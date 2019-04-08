@@ -3,7 +3,7 @@ import ReSOM.resom_mathlib as remath
 
 from scipy.sparse import csr_matrix, csc_matrix
 from ReSOM.constants import dzsoi, Ras, Rgas
-
+from ReSOM.constants import pom_B,mC_amino
 
 
 def resom_exinput(dtime, substrate_input, varid, ystates0):
@@ -85,36 +85,28 @@ def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 
 	return newCell,rCO2_phys,newEnz,phyMortCell,mobileX
 
-def depolymerization(ystates, varid, resomPar):
+def depolymerization(substrates, consumers, varid, resomPar, vmsoi):
 	"""
 	compute depolymerization
 	Inputs:
-		ystates: vector, state variable
+		substrates: vector of substrates, polymers and mineral surfaces
+		consumers: vector of consumers, enzymes
 		varid: structure holding variable ids
 		resomPar: structure holding model parameters
 	Output:
 		depolymer: matrix of depolymerization flux
 	"""
-	from ReSOM.constants import pom_B,mC_amino
 	#enzyme hydrolysis, Fp
-	#collect substrates
-	substrates = np.concatenate((ystates[varid.beg_polymer:varid.end_polymer+1], \
-		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
-	for j in range(varid.npolymers):
-		#conver into sorbtion surfaces
-		substrates[j]=substrates[j]/pom_B
-	#collect consumers
-	consumers=ystates[varid.beg_enzyme:varid.end_enzyme+1]
-	for j in range(varid.nenzymes):
-		consumers[j]=consumers[j]/(mC_amino*resomPar.enz_n[j])
+
+	#conver polymers into sorbtion surfaces
+	substrates[0:varid.npolymers]=substrates[0:varid.npolymers]/pom_B
+	#normalize enzyme concentration
+	consumers[0:varid.nenzymes]=consumers[0:varid.nenzymes]/(mC_amino*vmsoi)
+	consumers[0:varid.nenzymes]=consumers[0:varid.nenzymes]/resomPar.enz_n[0:varid.nenzymes]
 	nS = np.size(substrates)
 	nE = np.size(consumers)
 	#collect matrix of affinity parameters
 	Kffs=resomPar.Kaff_Enz
-#	print('Kaff')
-#	print(Kffs)
-#	print(consumers)
-#	print(substrates)
 	sc_ij=remath.eca(consumers, substrates, Kffs, nE, nS)
 	#enzyme degradation
 	de_polymer=sc_ij[0:nE,0:varid.npolymers]*resomPar.vmax_depoly*pom_B
@@ -136,15 +128,14 @@ def uptake_monomer(ystates, varid, resomPar):
 	from ReSOM.constants import cmass_to_cell
 	S1=ystates[varid.beg_monomer:varid.end_monomer+1]
 	#convert into mols of monomers
-	for j in range(varid.nmonomers):
-		S1[j]=S1[j]/resomPar.catom_monomer[j]
+
+	S1[0:varid.nmonomers]=S1[0:varid.nmonomers]/resomPar.catom_monomer[0:varid.nmonomers]
 
 	S2=np.array([ystates[varid.oxygen]])
 	E =np.concatenate((ystates[varid.beg_microbeV:varid.end_microbeV+1], \
 		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
 	#conver into mol of cells
-	for j in range(varid.nmicrobes):
-		E[j]=E[j]*cmass_to_cell
+	E[0:varid.nmicrobes]=E[0:varid.nmicrobes]*cmass_to_cell
 	nS1=np.size(S1)
 	nS2=np.size(S2)
 	nE =np.size(E)
@@ -169,7 +160,7 @@ def uptake_monomer(ystates, varid, resomPar):
 	fo2=remath.ecanorm(E, S1, Kffs, nE, nS)
 	return mic_upmonomer,fo2
 
-def resom_dyncore(ystates, dtime, varid, reactionid, resomPar):
+def resom_dyncore(ystates, dtime, varid, reactionid, resomPar, vmsoi):
 	"""
 	resom microbial dynamics
 	Inputs:
@@ -177,6 +168,7 @@ def resom_dyncore(ystates, dtime, varid, reactionid, resomPar):
 		dtime        : scalar, model time step
 		reactionid   : structure, reaction labels
 		resomPar     : structure, microbial parameters
+		vmsoi        : volumetric soil moisture content
 	Outputs:
 		rrates       : vector reaction rates
     	mic_umonomer : matrix, monomer uptake rate
@@ -187,7 +179,14 @@ def resom_dyncore(ystates, dtime, varid, reactionid, resomPar):
  		mobileX      : vector, reserve mobilization rate
 	"""
 	rrates=np.zeros(reactionid.nbreactions)
-	de_polymer=depolymerization(ystates, varid, resomPar)
+
+	#collect substrates
+	substrates = np.concatenate((ystates[varid.beg_polymer:varid.end_polymer+1], \
+		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
+	#collect consumers
+	consumers=ystates[varid.beg_enzyme:varid.end_enzyme+1]
+	#do enzymatic depolymerization
+	de_polymer=depolymerization(substrates, consumers, varid, resomPar, vmsoi)
 
 	#monomer uptake
 	mic_umonomer,fo2=uptake_monomer(ystates, varid, resomPar)
