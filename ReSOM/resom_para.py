@@ -73,48 +73,56 @@ class resomPar():
 	def __init__(self,varid):
 		nE=varid.nenzymes
 		nS=varid.npolymers+varid.nmineralAs
+		#activation energies
+		self.Delta_E_depoly =np.ones((nE,varid.npolymers))*30.e3     #activation energy of depolymerization, J/mol
+		self.Delta_E_Eminerals=np.ones((nE,varid.nmineralAs))*45.e3  #activation energy of enzyme-mineral binding, J/mol
+		self.Delta_G_X=np.ones(varid.nmicrobes)*60.e3                #activiation energy of reserve mobilization, J/mol
+		self.Delta_G_V=np.ones(varid.nmicrobes)*30.e3                #Gibbs energy for somatic maintenance, J/mol
+		self.Delta_monomer=np.zeros(varid.nmonomers)+20.e3           #activiation energy of monomer oxidation
+		#thermal stability parameter
 		self.enz_n = np.ones(varid.nmicrobes)*270.                   #average number of amino acids in the enzyme
 		self.N_CH  = np.ones(varid.nmicrobes)*6.                     #average number of non-polar hydrogen atmos per amino acid
 		self.Delta_H_s=np.ones(varid.nmicrobes)*5330.                #J/mol amino acids
 		self.Tref  = np.ones(varid.nmicrobes)*298.15                 #reference temperature where kinetic rates are computed
+
 		self.Kaff_Enz=np.ones((nE,nS))*2600                          #enzyme-substrate affinity, mol/m3, estimated
 		self.k2_enz=np.ones((nE,nS))*5.                              #specific enzyme hydrolysis rate
 		self.Enz_radius= np.ones(nE)*5.e-9                            #5 nm, hydrated enzyme radius
 		self.A_enz     = np.ones(nE)
 		self.vmax_depoly_0=np.ones((nE,varid.npolymers))*3.2e3       #reference maximum depolymerization rate, s-1, estimated
 		self.vmax_depoly=np.ones((nE,varid.npolymers))*3.2e-3        #instantaneous depolymerization rate, s-1
-		self.Delta_E_depoly =np.ones((nE,varid.npolymers))*30.e3     #activation energy of depolymerization, J/mol
-		self.Delta_E_Eminerals=np.ones((nE,varid.nmineralAs))*45.e3  #activation energy of enzyme-mineral binding, J/mol
 		self.DwEnz=np.zeros(nE)+1.e-10                               #enzyme diffusivity, Brune and Kim (1993), can be estimated by Einstein equation
-		self.KaffE_minerals=np.ones((nE,varid.nmineralAs))*0.e0      #affinity parameter of enzyme-mineral binding
-		self.Delta_G_X=np.ones(varid.nmicrobes)*60.e3                #activiation energy of reserve mobilization, J/mol
+		self.KaffE_minerals=np.ones((nE,varid.nmineralAs))*10.e0      #affinity parameter of enzyme-mineral binding
+		#enzyme parameters
+		self.micPE_alpha=np.zeros(varid.nmicrobes)+0.1               #maximum enzyme production rate, s-1
+		self.EnziDek= np.zeros(varid.nmicrobes)+1.e-6                #enzyme decay rate, s-1
+		#yield rates
 		self.micYVM = np.zeros(varid.nmicrobes)+0.3                  #maintenance yield from structural biomass
 		self.micYXE = np.zeros(varid.nmicrobes)+0.5                  #enzyme production yield from reserve
 		self.micYXV = np.zeros(varid.nmicrobes)+0.5                  #structural biomass yield from reserve
-		self.micPE_alpha=np.zeros(varid.nmicrobes)+0.1               #maximum enzyme production rate, s-1
-		self.micX_hr= np.ones(varid.nmicrobes)*1.e-6                  #reference reserve mobilization rate, s-1
+		self.micX_hr= np.ones(varid.nmicrobes)*5.e-6                 #reference reserve mobilization rate, s-1
 		self.micX_h0= np.zeros(varid.nmicrobes)+0.1                  #reserve mobilization rate, s-1
 		self.micV_mr= np.zeros(varid.nmicrobes)+1.e-7                #reference specific maintenance, s-1
 		self.micV_m = self.micV_mr                                   #somatic maintenance
-		self.Delta_G_V=np.ones(varid.nmicrobes)*30.e3                #Gibbs energy for somatic maintenance, J/mol
-		self.cell_radius=np.zeros(varid.nmicrobes)+1.e-6             #cell radius, m
-		self.EnziDek= np.zeros(varid.nmicrobes)+1.e-6                #enzyme decay rate, s-1
+		#mortality parameter
 		self.miciMort=np.zeros(varid.nmicrobes)+1.e-7                #intrinsic specific microbial mortality, s-1
 		self.micPerstV=np.zeros(varid.nmicrobes)+0.01                #half saturation constant for microbial mortality, mol/m3
+		self.cell_radius=np.zeros(varid.nmicrobes)+1.e-6             #cell radius, m
+
 		self.K_mic_monomer=np.zeros((varid.nmicrobes,varid.nmonomers))+1.e-2  #momonmer affinity to microbes, mol/m3
 		self.K_minerals_monomer=np.zeros((varid.nmineralAs,varid.nmonomers))+1.0  #monomer affinity to mineral surfaces, mol/m3
 		self.nosc_monomer=np.zeros(varid.nmonomers)                  #nominal oxidation status
 		self.YX_monomer=np.zeros(varid.nmonomers)+0.5                #reserve yield rate from monomer oxidation
-		self.Delta_monomer=np.zeros(varid.nmonomers)+20.e3           #activiation energy of monomer oxidation
 		self.k2_umonomer=np.ones((varid.nmicrobes,varid.nmonomers))*100.       #specific monomer processing rate per transporter , s-1
 		self.k2_tp_monomer=np.ones((varid.nmicrobes,varid.nmonomers))*3000.    #number of monomer transporters
 		self.vmax_umonomer=np.ones((varid.nmicrobes,varid.nmonomers))*1.e-6    #maximum monomer uptake rate, s-1
 		self.vmax_umonomer_0=np.ones((varid.nmicrobes,varid.nmonomers))*1.e-6    #reference maximum monomer uptake rate, s-1
-		self.catom_monomer=np.ones(varid.nmonomers)*10.
-		self.Dw_monomer = np.ones(varid.nmonomers)*1.e-9
+		self.catom_monomer=np.ones(varid.nmonomers)*10.				 #number of C atoms per monomer
+		self.Dw_monomer = np.ones(varid.nmonomers)*1.e-9			 #monomer diffusivity
+		self.K_mic_oxygen=np.ones((varid.nmicrobes))*1.e-3           #oxygen affinity parameter, mol/m3
+		#transporter parameters
 		self.k2_uo2=np.ones(varid.nmicrobes)*100.                    #maximum oxygen uptake rate per transporter, s-1
 		self.mic_tp_o2=np.ones(varid.nmicrobes)*3000.                #number of oxygen transporters
-		self.K_mic_oxygen=np.ones((varid.nmicrobes))*1.e-3           #oxygen affinity parameter, mol/m3
 		self.f0=np.ones((varid.nmicrobes,varid.nmonomers))*0.5       #monomer interception rate
 		self.f0_o2=np.ones(varid.nmicrobes)*0.5                      #oxygen interception rate
 		self.YX2necm=np.zeros(varid.nmicrobes)+0.05                  #fraction of lysed cell go to monomers
@@ -205,4 +213,5 @@ def update_kinetics_par(varid, resompar, tsoil, envpar, vmsoi, veffpore):
 		#print('Km_oxygen1=%f mol aqueous O2 m-3'%resompar.K_mic_oxygen[j])
 		#update the specific reserve turnover rate
 		resompar.micX_h0[j]=resompar.micX_hr[j]*fact*np.exp(-resompar.Delta_G_X[j]*iRgastsoi)
+		#update demand of somatic maintenance
 		resompar.micV_m[j] =resompar.micV_mr[j]*np.exp(-resompar.Delta_G_V[j]*iRgastsoi)

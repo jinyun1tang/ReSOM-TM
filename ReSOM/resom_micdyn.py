@@ -50,10 +50,11 @@ def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 			dm = dmg-resomPar.micV_m[j]            #total avaiable reserve flux for non-maintenance use
 			#print('dm=%e,dmg=%e,resomPar.micV_m[j]=%e'%(dm,dmg,resomPar.micV_m[j]))
 			if dm <= 0.0:
-				#check whether electron acceptor limitation is on
+				#check whether electron acceptor limitation is on by computing e-acceptor unlimited reserve mobilization
 				dm0=resomPar.micX_h0[j]*ee-resomPar.micV_m[j]
-				#print('resomPar.micX_h0[j]=%f,ee=%f,resomPar.micV_m[j]=%f'%(resomPar.micX_h0[j],ee,resomPar.micV_m[j]))
+				#print('dm0=%e'%dm0)
 				if dm0<=0.0:
+					#reserve limited
 					#cell shrink because reserve limitation
 					newCell[j]=dm/(ee+resomPar.micYVM[j])    # < 0.
 					rCO2_m[j]=(resomPar.micX_h0[j]*fo2[j]-newCell[j])*ee-newCell[j] #amount co2 for maitanance
@@ -74,14 +75,19 @@ def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 			phyMortCell[j]=(emortCell[j]+imortCell[j])* \
 				ystates[varid.beg_microbeV+j]/(resomPar.micPerstV[j]+ystates[varid.beg_microbeV+j])
 			mobileX[j]=(resomPar.micX_h0[j]*fo2[j]-newCell[j])*ee
+			rCO2_m[j]=rCO2_m[j]*ystates[varid.beg_microbeV+j]
+			rCO2_g[j]=rCO2_g[j]*ystates[varid.beg_microbeV+j]
+			rCO2_e[j]=rCO2_e[j]*ystates[varid.beg_microbeV+j]
 			rCO2_phys[j]=rCO2_m[j]+rCO2_g[j]+rCO2_e[j]
+			#print('co2:m=%18.10e,g=%18.10e,e=%18.10e,mobx=%18.10e,newcell=%18.10e'%(rCO2_m[j]*dtime,rCO2_g[j]*dtime,\
+			#	rCO2_e[j]*dtime,mobileX[j]*dtime,newCell[j]*dtime))
 			yee=ee-dtime*mobileX[j]
 			if yee<0.:
 				fx=ee/(dtime*mobileX[j])*0.999
+				mobileX[j]=mobileX[j]*fx
 				newCell[j]=newCell[j]*fx
 				rCO2_phys[j]=rCO2_phys[j]*fx
 				newEnz[j]=newEnz[j]*fx
-				mobileX[j]=mobileX[j]*fx
 
 	return newCell,rCO2_phys,newEnz,phyMortCell,mobileX
 
@@ -114,7 +120,7 @@ def depolymerization(substrates, consumers, varid, resomPar, vmsoi):
 #	print(de_polymer)
 	return de_polymer
 
-def uptake_monomer(ystates, varid, resomPar):
+def uptake_monomer(ystates, varid, resomPar, vmsoil):
 	"""
 	monomer uptake
 	input:
@@ -126,16 +132,17 @@ def uptake_monomer(ystates, varid, resomPar):
 		fo2           : vector, fraction of binded oxygen acceptor
 	"""
 	from ReSOM.constants import cmass_to_cell
-	S1=ystates[varid.beg_monomer:varid.end_monomer+1]
-	#convert into mols of monomers
+	S1=np.copy(ystates[varid.beg_monomer:varid.end_monomer+1])
 
-	S1[0:varid.nmonomers]=S1[0:varid.nmonomers]/resomPar.catom_monomer[0:varid.nmonomers]
+	#convert into mols of monomers
+	S1[0:varid.nmonomers]=S1[0:varid.nmonomers]/(vmsoil*resomPar.catom_monomer[0:varid.nmonomers])
 
 	S2=np.array([ystates[varid.oxygen]])
 	E =np.concatenate((ystates[varid.beg_microbeV:varid.end_microbeV+1], \
 		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
+
 	#conver into mol of cells
-	E[0:varid.nmicrobes]=E[0:varid.nmicrobes]*cmass_to_cell
+	E[0:varid.nmicrobes]=E[0:varid.nmicrobes]*cmass_to_cell/vmsoil
 	nS1=np.size(S1)
 	nS2=np.size(S2)
 	nE =np.size(E)
@@ -147,7 +154,7 @@ def uptake_monomer(ystates, varid, resomPar):
 	K2[:,0]=resomPar.K_mic_oxygen
 	#sc_ijk(nE,nS1,nS2)
 	sc_ijk=remath.supeca(E, S1, S2, K1, K2, nE, nS1, nS2)
-	mic_upmonomer=sc_ijk[0:varid.nmicrobes,0:varid.nmonomers,0]*resomPar.vmax_umonomer
+	mic_upmonomer=sc_ijk[0:varid.nmicrobes,0:varid.nmonomers,0]*resomPar.vmax_umonomer*vmsoil
 	#print('monomer')
 	#print(mic_upmonomer)
 	#gaseous oxygen uptake
@@ -184,19 +191,16 @@ def resom_dyncore(ystates, dtime, varid, reactionid, resomPar, vmsoi):
 	substrates = np.concatenate((ystates[varid.beg_polymer:varid.end_polymer+1], \
 		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
 	#collect consumers
-	consumers=ystates[varid.beg_enzyme:varid.end_enzyme+1]
+	consumers=np.copy(ystates[varid.beg_enzyme:varid.end_enzyme+1])
 	#do enzymatic depolymerization
 	de_polymer=depolymerization(substrates, consumers, varid, resomPar, vmsoi)
-
 	#monomer uptake
-	mic_umonomer,fo2=uptake_monomer(ystates, varid, resomPar)
+	mic_umonomer,fo2=uptake_monomer(ystates, varid, resomPar, vmsoi)
 	#cell physiology
 	newcell, rCO2_phys, newEnz, phyMortCell, mobileX=cell_physioloy(ystates,dtime, resomPar,varid,fo2)
 	#trophic dynamics induced cell mortality
 	#this will be place to plug in trophic dynamics related mortality
-
 	#assuming all cells are lysed right away.
-
 	#assemble the reactions
 	#depolymerization
 	for j in range(varid.npolymers):
@@ -300,7 +304,6 @@ def updates_microbes(varid, reactionid, resompar, ystates, dtime, rrates0,rrates
 			for k in range(varid.nmicrobes):
 				ystatesf[varid.beg_microbeX+k]=ystatesf[varid.beg_microbeX+k]+\
 					dtime*mic_umonomer[k,j]*fmonomer[j]*resompar.YX_monomer[j]
-
 
 	#update microbial physiological variables
 	for k in range(varid.nmicrobes):

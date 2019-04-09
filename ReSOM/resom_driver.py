@@ -5,10 +5,13 @@ import ReSOM.resom_ode as rode
 import ReSOM.resom_para as resom_para
 import ReSOM.resom_mathlib as remath
 import ReSOM.resom_forcing as reforc
+import ReSOM.resom_diagnose as rediag
+
+
 #model initialization
 dtime=3600.0   #time step size
-nsteps=24*365*2  #number of integration steps
-#nsteps=48
+nsteps=24*365*10  #number of integration steps
+#nsteps=24*10
 varid=resom_para.varid()
 reid=resom_para.reactionid(varid)
 resompar=resom_para.resomPar(varid)
@@ -19,30 +22,33 @@ envpar=resom_para.envPar()
 
 envpar.chb, envpar.sat,envpar.psisat,envpar.ksat=remath._clapp_hornberg_par(pct_sand, pct_clay)
 
+ftype='const'
+ftype='tcyclic'
 #define input data
 nc_file='/Users/jinyuntang/work/github/ReSOM-TM/sample_forcing.nc'
-rh2osoi_vol,reff_vol, tsoil=reforc.load_forcing(nc_file)
+rh2osoi_vol,reff_vol, tsoil=reforc.load_forcing(nc_file, ftype)
 vmsoi=rh2osoi_vol*envpar.sat
 veffpore=reff_vol*envpar.sat
 
 fpoly=0.7
-substrate_input[varid.polymer_pom-varid.beg_orgsubstrates]=1.e-5*fpoly
-substrate_input[varid.monomer_pom-varid.beg_orgsubstrates]=1.e-5*(1.-fpoly)
+cinput_flx=1.e-5
+substrate_input[varid.polymer_pom-varid.beg_orgsubstrates]=cinput_flx*fpoly
+substrate_input[varid.monomer_pom-varid.beg_orgsubstrates]=cinput_flx*(1.-fpoly)
 #declare state variable array for each day
 ystates=np.zeros((24,varid.ntvars))
 for j in range(varid.nmicrobes):
     ystates[0,varid.beg_microbeX+j]=1.e-3
     ystates[0,varid.beg_microbeV+j]=1.e-3
     ystates[0,varid.beg_enzyme+j]=1.e-2
-#ystates[0,varid.beg_polymer]=100.
-#ystates[0,varid.beg_monomer]=10.
+ystates[0,varid.beg_polymer]=10.
+ystates[0,varid.beg_monomer]=1.
 
-co2_flx=np.zeros(24)
 #obtain the reaction matrix for the bulk reactions
 csc_matrixp, csc_matrixd, csc_matrixs=rmicdyn.set_reaction_matrix(varid, reid,resompar)
 jj=0
 First=True
 ystates0=np.copy(ystates[jj,:])
+#total_mass=rediag.total_cmass_sum(ystates0,varid)
 
 import time
 
@@ -52,15 +58,16 @@ resom_para.update_microbial_par(varid,resompar)
 for nn in range(nsteps):
     #obtain the right forcing index
     tn=nn%8760
+    vmsoit=np.max([vmsoi[tn],0.01])
     ystates[jj,:]=ystates0
     #add external input
     ystates0[varid.mics_cum_cresp_co2]=0.0
     ystates0[varid.beg_mics_cummonomer:varid.end_mics_cummonomer+1]=0.0
-    resom_para.update_kinetics_par(varid, resompar, tsoil[tn], envpar, vmsoi[tn],veffpore[tn])
+    resom_para.update_kinetics_par(varid, resompar, tsoil[tn], envpar, vmsoit,veffpore[tn])
     ystates0=rmicdyn.resom_exinput(dtime, substrate_input, varid, ystates0)
     #run microbial model dynamic core
     rrates0,mic_umonomer, rCO2_phys, newcell, newEnz, phyMortCell, mobileX=\
-        rmicdyn.resom_dyncore(ystates0, dtime, varid, reid, resompar, vmsoi[tn])
+        rmicdyn.resom_dyncore(ystates0, dtime, varid, reid, resompar, vmsoit)
     #update substrates from depolymerization and monomer uptake
     y=np.copy(ystates0[0:varid.nbvars])
     ystates[jj,0:varid.nbvars],rrates=rode.bgc_integrate_sparse(varid.nbvars, reid.nbreactions, dtime,\
@@ -71,16 +78,15 @@ for nn in range(nsteps):
     	mic_umonomer,rCO2_phys,newcell,newEnz,phyMortCell,mobileX)
     y=np.copy(ystates[jj,:])
     ystates[jj,:]=rmicdyn.diffusion_gases(varid,resompar,y,dtime)
-    co2_flx[jj]=(ystates[jj,varid.co2]-y[varid.co2])/dtime
     if jj==23:
         if First:
             ystatesf=np.copy(ystates)
-            co2_flxf=np.copy(co2_flx)
         else:
             ystatesf=np.concatenate((ystatesf,ystates))
-            co2_flxf=np.concatenate((co2_flxf,co2_flx))
         First=False
     ystates0=np.copy(ystates[jj,:])
+    #total_mass=rediag.total_cmass_sum(ystates0,varid)
+
     jj=jj+1
     if jj>=24:
         jj=np.mod(jj,24)
@@ -110,7 +116,7 @@ ax3.plot(tt,ystatesf[:,varid.beg_monomer])
 ax3.plot(tt,ystatesf[:,varid.beg_enzyme])
 ax3.legend(['Monomer','Enzyme'])
 ax4=plt.subplot(4, 1, 4)
-ax4.plot(tt,ystatesf[:,varid.co2])
+ax4.plot(tt,ystatesf[:,varid.mics_cum_cresp_co2]/dtime)
 ax4.legend(['oxygen'])
 #ax2.plot(tt,ystatesf[:,varid.beg_microbeX])
 #ax2.legend(['CO2','microbeX'])
