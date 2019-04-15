@@ -10,8 +10,8 @@ import ReSOM.resom_diagnose as rediag
 
 #model initialization
 dtime=3600.0   #time step size
-nsteps=24*365*10  #number of integration steps
-#nsteps=24*10
+nsteps=24*365*4  #number of integration steps
+
 varid=resom_para.varid()
 reid=resom_para.reactionid(varid)
 resompar=resom_para.resomPar(varid)
@@ -22,16 +22,18 @@ envpar=resom_para.envPar()
 
 envpar.chb, envpar.sat,envpar.psisat,envpar.ksat=remath._clapp_hornberg_par(pct_sand, pct_clay)
 
+dels=[]
 ftype='const'
-ftype='tcyclic'
+#ftype,dels='tcyclic',[1.,1.]
+#ftype=''
 #define input data
 nc_file='/Users/jinyuntang/work/github/ReSOM-TM/sample_forcing.nc'
-rh2osoi_vol,reff_vol, tsoil=reforc.load_forcing(nc_file, ftype)
+rh2osoi_vol,reff_vol, tsoil=reforc.load_forcing(nc_file, ftype, dels)
 vmsoi=rh2osoi_vol*envpar.sat
 veffpore=reff_vol*envpar.sat
 
 fpoly=0.7
-cinput_flx=1.e-5
+cinput_flx=5.e-5
 substrate_input[varid.polymer_pom-varid.beg_orgsubstrates]=cinput_flx*fpoly
 substrate_input[varid.monomer_pom-varid.beg_orgsubstrates]=cinput_flx*(1.-fpoly)
 #declare state variable array for each day
@@ -48,7 +50,7 @@ csc_matrixp, csc_matrixd, csc_matrixs=rmicdyn.set_reaction_matrix(varid, reid,re
 jj=0
 First=True
 ystates0=np.copy(ystates[jj,:])
-#total_mass=rediag.total_cmass_sum(ystates0,varid)
+#total_mass=rediag.total_cmass_sum(0,ystates0,varid)
 
 import time
 
@@ -59,7 +61,7 @@ for nn in range(nsteps):
     #obtain the right forcing index
     tn=nn%8760
     vmsoit=np.max([vmsoi[tn],0.01])
-    ystates[jj,:]=ystates0
+    ystates[jj,:]=np.copy(ystates0)
     #add external input
     ystates0[varid.mics_cum_cresp_co2]=0.0
     ystates0[varid.beg_mics_cummonomer:varid.end_mics_cummonomer+1]=0.0
@@ -85,7 +87,7 @@ for nn in range(nsteps):
             ystatesf=np.concatenate((ystatesf,ystates))
         First=False
     ystates0=np.copy(ystates[jj,:])
-    #total_mass=rediag.total_cmass_sum(ystates0,varid)
+    #total_mass=rediag.total_cmass_sum(nn,ystates0,varid)
 
     jj=jj+1
     if jj>=24:
@@ -101,7 +103,7 @@ import matplotlib.pyplot as plt
 #print ystatesf[0,:]
 #print ystatesf[1,:]
 
-tt=range(nsteps)
+tt=np.linspace(0,nsteps-1,nsteps)*dtime/86400.
 ax1=plt.subplot(4, 1, 1)
 ax1.plot(tt,ystatesf[:,varid.beg_polymer])
 
@@ -116,8 +118,11 @@ ax3.plot(tt,ystatesf[:,varid.beg_monomer])
 ax3.plot(tt,ystatesf[:,varid.beg_enzyme])
 ax3.legend(['Monomer','Enzyme'])
 ax4=plt.subplot(4, 1, 4)
-ax4.plot(tt,ystatesf[:,varid.mics_cum_cresp_co2]/dtime)
-ax4.legend(['oxygen'])
+daily_co2=rediag.get_daily_ts(ystatesf[:,varid.mics_cum_cresp_co2])/dtime
+ax4.plot(np.arange(len(daily_co2)),daily_co2)
+#ax4.plot(tt[:26000:-1],ystatesf[:26000:-1,varid.beg_monomer])
+#ax4.plot(ystatesf[25000:25600,varid.mics_cum_cresp_co2]/dtime)
+ax4.legend(['CO2 respiration'])
 #ax2.plot(tt,ystatesf[:,varid.beg_microbeX])
 #ax2.legend(['CO2','microbeX'])
 plt.show()

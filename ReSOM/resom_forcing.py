@@ -2,7 +2,7 @@ import numpy as np
 from netCDF4 import Dataset
 import math
 
-def load_forcing(nc_infile,ftype):
+def load_forcing(nc_infile,ftype, dels=None):
     """
     load environmental forcing data from the specified nc_infile
     """
@@ -16,8 +16,12 @@ def load_forcing(nc_infile,ftype):
         rh2osoi_vol=np.ones(8760)*0.35
         reff_vol=np.ones(8760)
         time=np.linspace(0.,365.,8760)
-        del1=1.
-        del2=0.
+        if dels is None:
+            del1=1.
+            del2=0.
+        else:
+            del1=dels[0]
+            del2=dels[1]        
         tsoil=290-del1*10.*np.cos(2.*math.pi/365.*time)+del2*8.*np.sin(2.*math.pi*time)
     else:
         forcing=Dataset(nc_infile,"r")

@@ -74,11 +74,13 @@ def cell_physioloy(ystates,dtime, resomPar,varid,fo2):
 			imortCell[j] = resomPar.miciMort[j]                  #intrinsinc mortality
 			phyMortCell[j]=(emortCell[j]+imortCell[j])* \
 				ystates[varid.beg_microbeV+j]/(resomPar.micPerstV[j]+ystates[varid.beg_microbeV+j])
+			#dormancy equivalent reduction in mortality
+			#phyMortCell[j]=phyMortCell[j]*resomPar.fact_soil
 			mobileX[j]=(resomPar.micX_h0[j]*fo2[j]-newCell[j])*ee
 			rCO2_m[j]=rCO2_m[j]*ystates[varid.beg_microbeV+j]
 			rCO2_g[j]=rCO2_g[j]*ystates[varid.beg_microbeV+j]
 			rCO2_e[j]=rCO2_e[j]*ystates[varid.beg_microbeV+j]
-			rCO2_phys[j]=rCO2_m[j]+rCO2_g[j]+rCO2_e[j]
+			rCO2_phys[j]=(rCO2_m[j]+rCO2_g[j]+rCO2_e[j])
 			#print('co2:m=%18.10e,g=%18.10e,e=%18.10e,mobx=%18.10e,newcell=%18.10e'%(rCO2_m[j]*dtime,rCO2_g[j]*dtime,\
 			#	rCO2_e[j]*dtime,mobileX[j]*dtime,newCell[j]*dtime))
 			yee=ee-dtime*mobileX[j]
@@ -115,7 +117,7 @@ def depolymerization(substrates, consumers, varid, resomPar, vmsoi):
 	Kffs=resomPar.Kaff_Enz
 	sc_ij=remath.eca(consumers, substrates, Kffs, nE, nS)
 	#enzyme degradation
-	de_polymer=sc_ij[0:nE,0:varid.npolymers]*resomPar.vmax_depoly*pom_B
+	de_polymer=sc_ij[0:varid.nenzymes,0:varid.npolymers]*resomPar.vmax_depoly*pom_B
 #	print('depolymer')
 #	print(de_polymer)
 	return de_polymer
@@ -132,14 +134,20 @@ def uptake_monomer(ystates, varid, resomPar, vmsoil):
 		fo2           : vector, fraction of binded oxygen acceptor
 	"""
 	from ReSOM.constants import cmass_to_cell
-	S1=np.copy(ystates[varid.beg_monomer:varid.end_monomer+1])
+	S1=np.concatenate((ystates[varid.beg_monomer:varid.end_monomer+1], \
+		ystates[varid.beg_microbeX:varid.end_microbeX+1]))
 
+	S1[varid.nmonomers:]=S1[varid.nmonomers:]/ystates[varid.beg_microbeV:varid.end_microbeV+1]
 	#convert into mols of monomers
 	S1[0:varid.nmonomers]=S1[0:varid.nmonomers]/(vmsoil*resomPar.catom_monomer[0:varid.nmonomers])
 
 	S2=np.array([ystates[varid.oxygen]])
-	E =np.concatenate((ystates[varid.beg_microbeV:varid.end_microbeV+1], \
+	E = np.zeros(varid.nmicrobes+varid.nmineralAs+1)
+
+	E[0:varid.nmicrobes+varid.nmineralAs] =np.concatenate((ystates[varid.beg_microbeV:varid.end_microbeV+1], \
 		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
+
+	E[varid.nmicrobes+varid.nmineralAs]=np.sum(ystates[varid.beg_polymer:varid.end_polymer+1])
 
 	#conver into mol of cells
 	E[0:varid.nmicrobes]=E[0:varid.nmicrobes]*cmass_to_cell/vmsoil
@@ -154,7 +162,7 @@ def uptake_monomer(ystates, varid, resomPar, vmsoil):
 	K2[:,0]=resomPar.K_mic_oxygen
 	#sc_ijk(nE,nS1,nS2)
 	sc_ijk=remath.supeca(E, S1, S2, K1, K2, nE, nS1, nS2)
-	mic_upmonomer=sc_ijk[0:varid.nmicrobes,0:varid.nmonomers,0]*resomPar.vmax_umonomer*vmsoil
+	mic_upmonomer=sc_ijk[0:varid.nmicrobes,0:varid.nmonomers,0]*resomPar.vmax_umonomer
 	#print('monomer')
 	#print(mic_upmonomer)
 	#gaseous oxygen uptake
@@ -191,25 +199,33 @@ def resom_dyncore(ystates, dtime, varid, reactionid, resomPar, vmsoi):
 	substrates = np.concatenate((ystates[varid.beg_polymer:varid.end_polymer+1], \
 		ystates[varid.beg_mineralA:varid.end_mineralA+1]))
 	#collect consumers
-	consumers=np.copy(ystates[varid.beg_enzyme:varid.end_enzyme+1])
+	consumers=np.concatenate((ystates[varid.beg_enzyme:varid.end_enzyme+1],ystates[varid.beg_monomer:varid.end_monomer+1]))
+
 	#do enzymatic depolymerization
 	de_polymer=depolymerization(substrates, consumers, varid, resomPar, vmsoi)
 	#monomer uptake
 	mic_umonomer,fo2=uptake_monomer(ystates, varid, resomPar, vmsoi)
 	#cell physiology
 	newcell, rCO2_phys, newEnz, phyMortCell, mobileX=cell_physioloy(ystates,dtime, resomPar,varid,fo2)
+	#newcell=newcell*0.
+	#rCO2_phys=rCO2_phys*0.
+	#newEnz=newEnz*0.
+	#phyMortCell=phyMortCell*0.
+	#mobileX=mobileX*0.
 	#trophic dynamics induced cell mortality
 	#this will be place to plug in trophic dynamics related mortality
 	#assuming all cells are lysed right away.
 	#assemble the reactions
 	#depolymerization
+	#de_polymer=de_polymer*0.
+	#mic_umonomer=mic_umonomer*0.
 	for j in range(varid.npolymers):
-		rrates[reactionid.beg_depolymer+j]=np.sum(de_polymer[:,j])
+		rrates[reactionid.reac_beg_depolymer+j]=np.sum(de_polymer[:,j])
 	#monomer uptake
 	for j in range(varid.nmonomers):
-		rrates[reactionid.beg_mics_upmonomer+j]=np.sum(mic_umonomer[:,j])
+		rrates[reactionid.reac_beg_mics_upmonomer+j]=np.sum(mic_umonomer[:,j])
 	#carbon consuming respiration
-	rrates[reactionid.mics_cresp_oxygen]=np.sum(rCO2_phys)
+	rrates[reactionid.reac_mics_cresp_oxygen]=np.sum(rCO2_phys)
 	return rrates, mic_umonomer, rCO2_phys, newcell, newEnz, phyMortCell, mobileX
 
 def set_polymer_monomer_matrix():
@@ -237,26 +253,26 @@ def set_reaction_matrix(varid, reactionid, resompar):
 	poly2monomer_matrix=set_polymer_monomer_matrix()
 	for j in range(varid.npolymers):
 		polymer_id=varid.beg_polymer+j
-		react_id=reactionid.beg_depolymer+j
+		react_id=reactionid.reac_beg_depolymer+j
 		matrixs[polymer_id,react_id]=-1.
 		for k in range(varid.nmonomers):
 			monomerid=varid.beg_monomer+k
 			matrixs[monomerid,react_id]=poly2monomer_matrix[j,k]
 	#monomer uptake
 	#nomomer + (0.25*nosc+1)o2->co2 + energy
-	for j in range(reactionid.beg_mics_upmonomer,reactionid.end_mics_upmonomer+1):
-		k=j-reactionid.beg_mics_upmonomer
+	for j in range(reactionid.reac_beg_mics_upmonomer,reactionid.reac_end_mics_upmonomer+1):
+		k=j-reactionid.reac_beg_mics_upmonomer
 		monomerid=varid.beg_monomer+k
 		matrixs[monomerid,j]=-1.
 		matrixs[varid.oxygen,j]=(-1.0+0.25*resompar.nosc_monomer[k])*(1.-resompar.YX_monomer[k])
-		matrixs[varid.co2,j]=resompar.YX_monomer[k]
+		matrixs[varid.co2,j]=1.-resompar.YX_monomer[k]
+		matrixs[varid.mics_cum_cresp_co2,j]=1.-resompar.YX_monomer[k]
 		#the following have to be
 		matrixs[varid.beg_mics_cummonomer+k,j]=1.
 	#assuming growth and maintenance respiration has oxygen quotient of 1.
-	matrixs[varid.oxygen,reactionid.mics_cresp_oxygen]=-1.
-	matrixs[varid.co2, reactionid.mics_cresp_oxygen] = 1.
-	matrixs[varid.mics_cum_cresp_co2, reactionid.mics_cresp_oxygen]=1.
-
+	matrixs[varid.oxygen,reactionid.reac_mics_cresp_oxygen]=-1.
+	matrixs[varid.co2, reactionid.reac_mics_cresp_oxygen] = 1.
+	matrixs[varid.mics_cum_cresp_co2, reactionid.reac_mics_cresp_oxygen]=1.
 	matrixp=np.copy(matrixs)
 	matrixd=np.copy(matrixs)
 	matrixd[matrixs>0.0]=0.0
@@ -288,32 +304,34 @@ def updates_microbes(varid, reactionid, resompar, ystates, dtime, rrates0,rrates
 	ystatesf=np.copy(ystates)
 	#obtain the actual flux limiter
 	#oxygen
-	if rrates0[reactionid.mics_cresp_oxygen] > 0.:
+	if rrates0[reactionid.reac_mics_cresp_oxygen] > 0.:
 		#the strength of oxygen limitation
-		foxygen=rrates[reactionid.mics_cresp_oxygen]/rrates0[reactionid.mics_cresp_oxygen]
+		foxygen=rrates[reactionid.reac_mics_cresp_oxygen]/rrates0[reactionid.reac_mics_cresp_oxygen]
 	else:
 		foxygen=0.0
 	#organic monomers
 	fmonomer=np.zeros(varid.nmonomers)
 	for j in range(varid.nmonomers):
-		if rrates0[reactionid.beg_mics_upmonomer+j] > 0.0:
-			fmonomer[j]=rrates[reactionid.beg_mics_upmonomer+j]/rrates0[reactionid.beg_mics_upmonomer+j]
+		if rrates0[reactionid.reac_beg_mics_upmonomer+j] > 0.0:
+			fmonomer[j]=rrates[reactionid.reac_beg_mics_upmonomer+j]/rrates0[reactionid.reac_beg_mics_upmonomer+j]
 
 	for j in range(varid.nmonomers):
 		if fmonomer[j] > 0.0:
 			for k in range(varid.nmicrobes):
 				ystatesf[varid.beg_microbeX+k]=ystatesf[varid.beg_microbeX+k]+\
 					dtime*mic_umonomer[k,j]*fmonomer[j]*resompar.YX_monomer[j]
-
 	#update microbial physiological variables
 	for k in range(varid.nmicrobes):
 		#growth
+		#decrease of reserve from mobilization
 		ystatesf[varid.beg_microbeX+k]=ystatesf[varid.beg_microbeX+k]-\
 			(dtime*mobileX[k]*foxygen)*ystatesf[varid.beg_microbeV+k]
+		#increase of structure due to active growth
 		ystatesf[varid.beg_microbeV+k]=ystatesf[varid.beg_microbeV+k]*\
-			np.exp(dtime*newCell[k]*foxygen)
+			(1.+dtime*newCell[k]*foxygen)
 
 		#reserve biomass goes to necromass
+		#end of mortality reserve biomass
 		ystate=ystatesf[varid.beg_microbeX+k]*np.exp(-dtime*phyMortCell[k])
 		ystatesf[varid.polymer_necm]=ystatesf[varid.polymer_necm]-\
 			(ystate-ystatesf[varid.beg_microbeX+k])*resompar.YX2necm[k]
@@ -322,13 +340,14 @@ def updates_microbes(varid, reactionid, resompar, ystates, dtime, rrates0,rrates
 		ystatesf[varid.beg_microbeX+k]=ystate
 
 		#structural biomass goes to necromass
+		#end of mortality structural biomass
 		ystate=ystatesf[varid.beg_microbeV+k]*np.exp(-dtime*phyMortCell[k])
 		ystatesf[varid.polymer_necm]=ystatesf[varid.polymer_necm]-ystate+ystatesf[varid.beg_microbeV+k]
 		ystatesf[varid.beg_microbeV+k]=ystate
 
 		#enzyme production
 		ystatesf[varid.beg_enzyme+k]=ystatesf[varid.beg_enzyme+k]+\
-			newEnz[k]*foxygen*ystatesf[varid.beg_microbeV+k]*dtime
+			dtime*newEnz[k]*foxygen*ystatesf[varid.beg_microbeV+k]
 		#compute decayed enzyme
 		ystate=ystatesf[varid.beg_enzyme+k]*np.exp(-dtime*resompar.EnziDek[k])
 		ystatesf[varid.polymer_denz]=ystatesf[varid.polymer_denz]-ystate+ystatesf[varid.beg_enzyme+k]
